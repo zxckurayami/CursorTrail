@@ -43,13 +43,14 @@ namespace CursorTrailInstaller
             "Programs",
             AppName);
 
-        private TextBox pathBox;
+        private PathField pathField;
         private ProgressView progressBar;
         private Label statusLabel;
         private AccentButton installButton;
         private AccentButton browseButton;
         private AccentButton cancelButton;
         private AccentButton launchButton;
+        private string selectedInstallDir;
         private string installedExePath;
 
         public SetupForm()
@@ -96,26 +97,15 @@ namespace CursorTrailInstaller
 
             Controls.Add(UiKit.MakeLabel("Папка установки", 9.5F, FontStyle.Bold, UiKit.MutedText, new Point(48, 326), new Size(180, 22)));
 
-            var inputPanel = new RoundedPanel
+            selectedInstallDir = defaultInstallDir;
+            pathField = new PathField
             {
                 Location = new Point(48, 352),
                 Size = new Size(590, 42),
-                Radius = 12,
-                BackColor = Color.FromArgb(32, 32, 36),
-                BorderColor = Color.FromArgb(32, 32, 36)
+                PathText = selectedInstallDir
             };
-            pathBox = new TextBox
-            {
-                BorderStyle = BorderStyle.None,
-                BackColor = Color.FromArgb(32, 32, 36),
-                ForeColor = UiKit.Text,
-                Font = UiKit.Segoe(10.2F, FontStyle.Regular),
-                Location = new Point(14, 11),
-                Size = new Size(560, 20),
-                Text = defaultInstallDir
-            };
-            inputPanel.Controls.Add(pathBox);
-            Controls.Add(inputPanel);
+            pathField.Click += BrowseButton_Click;
+            Controls.Add(pathField);
 
             browseButton = new AccentButton
             {
@@ -172,10 +162,11 @@ namespace CursorTrailInstaller
             using (var dialog = new FolderBrowserDialog())
             {
                 dialog.Description = "Выберите папку установки Cursor Trail";
-                dialog.SelectedPath = pathBox.Text;
+                dialog.SelectedPath = selectedInstallDir;
                 if (dialog.ShowDialog(this) == DialogResult.OK)
                 {
-                    pathBox.Text = dialog.SelectedPath;
+                    selectedInstallDir = dialog.SelectedPath;
+                    pathField.PathText = selectedInstallDir;
                 }
             }
         }
@@ -186,7 +177,7 @@ namespace CursorTrailInstaller
             progressBar.Value = 0;
             statusLabel.Text = "Подготовка установки...";
 
-            var installDir = pathBox.Text.Trim();
+            var installDir = selectedInstallDir.Trim();
             Task.Factory.StartNew(delegate
             {
                 Install(installDir);
@@ -222,7 +213,7 @@ namespace CursorTrailInstaller
         {
             installButton.Enabled = enabled;
             browseButton.Enabled = enabled;
-            pathBox.Enabled = enabled;
+            pathField.Enabled = enabled;
             cancelButton.Enabled = enabled;
         }
 

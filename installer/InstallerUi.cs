@@ -148,7 +148,8 @@ namespace CursorTrailInstaller
 
         protected InstallerShellForm()
         {
-            AutoScaleMode = AutoScaleMode.None;
+            AutoScaleDimensions = new SizeF(96F, 96F);
+            AutoScaleMode = AutoScaleMode.Dpi;
             BackColor = UiKit.Background;
             Font = UiKit.Segoe(10F, FontStyle.Regular);
             FormBorderStyle = FormBorderStyle.None;
@@ -184,7 +185,7 @@ namespace CursorTrailInstaller
 
             var close = new WindowButton("x")
             {
-                Location = new Point(ClientSize.Width - 42, 5),
+                Location = new Point(titleBar.Width - 42, 5),
                 Anchor = AnchorStyles.Top | AnchorStyles.Right
             };
             close.Click += delegate { Close(); };
@@ -192,7 +193,7 @@ namespace CursorTrailInstaller
 
             var minimize = new WindowButton("-")
             {
-                Location = new Point(ClientSize.Width - 78, 5),
+                Location = new Point(titleBar.Width - 78, 5),
                 Anchor = AnchorStyles.Top | AnchorStyles.Right
             };
             minimize.Click += delegate { WindowState = FormWindowState.Minimized; };
@@ -353,6 +354,74 @@ namespace CursorTrailInstaller
         }
     }
 
+    internal sealed class PathField : Control
+    {
+        private bool hovered;
+        private string pathText;
+
+        public string PathText
+        {
+            get { return pathText; }
+            set
+            {
+                pathText = value ?? string.Empty;
+                Invalidate();
+            }
+        }
+
+        public PathField()
+        {
+            SetStyle(ControlStyles.SupportsTransparentBackColor, true);
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+            BackColor = Color.Transparent;
+            Cursor = Cursors.Hand;
+            Font = UiKit.Segoe(10.2F, FontStyle.Regular);
+            Size = new Size(590, 42);
+        }
+
+        protected override void OnMouseEnter(EventArgs e)
+        {
+            hovered = true;
+            Invalidate();
+            base.OnMouseEnter(e);
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            hovered = false;
+            Invalidate();
+            base.OnMouseLeave(e);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            var rect = new Rectangle(0, 0, Width - 1, Height - 1);
+            var fillColor = Enabled
+                ? (hovered ? Color.FromArgb(38, 38, 42) : Color.FromArgb(32, 32, 36))
+                : Color.FromArgb(27, 27, 31);
+
+            using (var path = UiKit.RoundRect(rect, 12))
+            using (var fill = new SolidBrush(fillColor))
+            {
+                e.Graphics.FillPath(fill, path);
+            }
+
+            var textRect = new Rectangle(14, 0, Width - 28, Height);
+            TextRenderer.DrawText(
+                e.Graphics,
+                PathText,
+                Font,
+                textRect,
+                Enabled ? UiKit.Text : Color.FromArgb(120, 120, 128),
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs pevent)
+        {
+        }
+    }
+
     internal sealed class RoundedPanel : Panel
     {
         public int Radius { get; set; }
@@ -364,6 +433,7 @@ namespace CursorTrailInstaller
             BorderColor = UiKit.Border;
             BackColor = UiKit.Surface2;
             DoubleBuffered = true;
+            SetStyle(ControlStyles.SupportsTransparentBackColor, true);
         }
 
         protected override void OnPaint(PaintEventArgs e)
