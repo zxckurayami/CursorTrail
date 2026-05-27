@@ -65,7 +65,7 @@ namespace CursorTrailInstaller
             var header = new HeaderPanel
             {
                 Location = new Point(1, 43),
-                Size = new Size(ClientSize.Width - 2, 154),
+                Size = new Size(ClientSize.Width - 2, 128),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
             };
             Controls.Add(header);
@@ -73,28 +73,16 @@ namespace CursorTrailInstaller
             var logo = new LogoView
             {
                 Image = UiKit.LoadLogoImage(),
-                Location = new Point(40, 28),
-                Size = new Size(96, 96)
+                Location = new Point(48, 28),
+                Size = new Size(72, 72),
+                Glow = false
             };
             header.Controls.Add(logo);
 
-            header.Controls.Add(UiKit.MakeLabel("Cursor Trail", 26F, FontStyle.Bold, UiKit.Text, new Point(154, 35), new Size(360, 42)));
-            header.Controls.Add(UiKit.MakeLabel("Красивый след курсора. Быстрая установка для Windows.", 10.5F, FontStyle.Regular, UiKit.MutedText, new Point(158, 82), new Size(460, 24)));
+            header.Controls.Add(UiKit.MakeLabel("Cursor Trail", 25F, FontStyle.Bold, UiKit.Text, new Point(144, 34), new Size(360, 40)));
+            header.Controls.Add(UiKit.MakeLabel("Установка версии " + Version + " для Windows", 10.2F, FontStyle.Regular, UiKit.MutedText, new Point(147, 76), new Size(420, 24)));
 
-            var versionBadge = new RoundedPanel
-            {
-                Location = new Point(158, 112),
-                Size = new Size(116, 28),
-                Radius = 14,
-                BackColor = Color.FromArgb(36, 36, 43),
-                BorderColor = Color.FromArgb(65, 65, 76)
-            };
-            var versionLabel = UiKit.MakeLabel("версия " + Version, 9F, FontStyle.Bold, UiKit.Text, new Point(0, 0), new Size(116, 28));
-            versionLabel.TextAlign = ContentAlignment.MiddleCenter;
-            versionBadge.Controls.Add(versionLabel);
-            header.Controls.Add(versionBadge);
-
-            var bodyTitle = UiKit.MakeLabel("Установка приложения", 19F, FontStyle.Bold, UiKit.Text, new Point(44, 222), new Size(420, 34));
+            var bodyTitle = UiKit.MakeLabel("Установка", 19F, FontStyle.Bold, UiKit.Text, new Point(46, 212), new Size(420, 34));
             Controls.Add(bodyTitle);
 
             var bodyText = UiKit.MakeLabel(
@@ -102,29 +90,24 @@ namespace CursorTrailInstaller
                 10.2F,
                 FontStyle.Regular,
                 UiKit.MutedText,
-                new Point(46, 260),
+                new Point(48, 250),
                 new Size(700, 44));
             Controls.Add(bodyText);
 
-            AddFeatureChip("Профили", new Point(46, 308));
-            AddFeatureChip("RGB Trail", new Point(142, 308));
-            AddFeatureChip("Sakura", new Point(248, 308));
-            AddFeatureChip("Pixel", new Point(340, 308));
-
-            Controls.Add(UiKit.MakeLabel("Папка установки", 9.5F, FontStyle.Bold, UiKit.MutedText, new Point(46, 356), new Size(180, 22)));
+            Controls.Add(UiKit.MakeLabel("Папка установки", 9.5F, FontStyle.Bold, UiKit.MutedText, new Point(48, 326), new Size(180, 22)));
 
             var inputPanel = new RoundedPanel
             {
-                Location = new Point(46, 381),
+                Location = new Point(48, 352),
                 Size = new Size(590, 42),
                 Radius = 12,
-                BackColor = UiKit.Surface2,
-                BorderColor = Color.FromArgb(66, 66, 76)
+                BackColor = Color.FromArgb(32, 32, 36),
+                BorderColor = Color.FromArgb(32, 32, 36)
             };
             pathBox = new TextBox
             {
                 BorderStyle = BorderStyle.None,
-                BackColor = UiKit.Surface2,
+                BackColor = Color.FromArgb(32, 32, 36),
                 ForeColor = UiKit.Text,
                 Font = UiKit.Segoe(10.2F, FontStyle.Regular),
                 Location = new Point(14, 11),
@@ -137,7 +120,7 @@ namespace CursorTrailInstaller
             browseButton = new AccentButton
             {
                 Text = "Обзор",
-                Location = new Point(654, 381),
+                Location = new Point(654, 352),
                 Size = new Size(130, 42)
             };
             browseButton.Click += BrowseButton_Click;
@@ -145,12 +128,12 @@ namespace CursorTrailInstaller
 
             progressBar = new ProgressView
             {
-                Location = new Point(46, 451),
+                Location = new Point(48, 432),
                 Size = new Size(738, 16)
             };
             Controls.Add(progressBar);
 
-            statusLabel = UiKit.MakeLabel("Готов к установке.", 9.5F, FontStyle.Regular, UiKit.MutedText, new Point(46, 477), new Size(480, 24));
+            statusLabel = UiKit.MakeLabel("Готов к установке.", 9.5F, FontStyle.Regular, UiKit.MutedText, new Point(48, 462), new Size(480, 24));
             Controls.Add(statusLabel);
 
             installButton = new AccentButton
@@ -182,22 +165,6 @@ namespace CursorTrailInstaller
             };
             cancelButton.Click += delegate { Close(); };
             Controls.Add(cancelButton);
-        }
-
-        private void AddFeatureChip(string text, Point location)
-        {
-            var chip = new RoundedPanel
-            {
-                Location = location,
-                Size = new Size(Math.Max(78, text.Length * 9 + 28), 30),
-                Radius = 15,
-                BackColor = Color.FromArgb(31, 31, 37),
-                BorderColor = Color.FromArgb(56, 56, 66)
-            };
-            var label = UiKit.MakeLabel(text, 8.5F, FontStyle.Bold, UiKit.Text, new Point(0, 0), new Size(chip.Width, chip.Height));
-            label.TextAlign = ContentAlignment.MiddleCenter;
-            chip.Controls.Add(label);
-            Controls.Add(chip);
         }
 
         private void BrowseButton_Click(object sender, EventArgs e)

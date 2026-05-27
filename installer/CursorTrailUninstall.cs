@@ -63,7 +63,8 @@ namespace CursorTrailInstaller
             {
                 Image = UiKit.LoadLogoImage(),
                 Location = new Point(38, 24),
-                Size = new Size(82, 82)
+                Size = new Size(72, 72),
+                Glow = false
             };
             header.Controls.Add(logo);
 
@@ -77,8 +78,8 @@ namespace CursorTrailInstaller
                 Location = new Point(44, 238),
                 Size = new Size(632, 54),
                 Radius = 12,
-                BackColor = UiKit.Surface2,
-                BorderColor = Color.FromArgb(66, 66, 76)
+                BackColor = Color.FromArgb(32, 32, 36),
+                BorderColor = Color.FromArgb(32, 32, 36)
             };
             pathPanel.Controls.Add(UiKit.MakeLabel(installDir, 9.5F, FontStyle.Regular, UiKit.Text, new Point(14, 17), new Size(604, 22)));
             Controls.Add(pathPanel);

@@ -12,13 +12,13 @@ namespace CursorTrailInstaller
     {
         public static readonly Color Background = Color.FromArgb(16, 16, 18);
         public static readonly Color Surface = Color.FromArgb(23, 23, 27);
-        public static readonly Color Surface2 = Color.FromArgb(34, 34, 39);
-        public static readonly Color Border = Color.FromArgb(48, 48, 56);
+        public static readonly Color Surface2 = Color.FromArgb(31, 31, 35);
+        public static readonly Color Border = Color.FromArgb(31, 31, 35);
         public static readonly Color Text = Color.FromArgb(245, 247, 251);
-        public static readonly Color MutedText = Color.FromArgb(171, 178, 195);
-        public static readonly Color AccentBlue = Color.FromArgb(103, 126, 255);
-        public static readonly Color AccentPink = Color.FromArgb(255, 91, 204);
-        public static readonly Color AccentOrange = Color.FromArgb(255, 146, 82);
+        public static readonly Color MutedText = Color.FromArgb(176, 176, 184);
+        public static readonly Color AccentBlue = Color.FromArgb(245, 245, 245);
+        public static readonly Color AccentPink = Color.FromArgb(245, 245, 245);
+        public static readonly Color AccentOrange = Color.FromArgb(245, 245, 245);
 
         public static Font Segoe(float size, FontStyle style)
         {
@@ -138,40 +138,6 @@ namespace CursorTrailInstaller
 
         public static void DrawTrail(Graphics graphics, Rectangle bounds)
         {
-            graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            using (var path = new GraphicsPath())
-            {
-                path.AddBezier(
-                    bounds.Left + 30,
-                    bounds.Top + 118,
-                    bounds.Left + 180,
-                    bounds.Top + 36,
-                    bounds.Left + 320,
-                    bounds.Top + 174,
-                    bounds.Right - 28,
-                    bounds.Top + 50);
-
-                using (var glow = new Pen(Color.FromArgb(30, AccentPink), 16))
-                using (var blue = new Pen(Color.FromArgb(110, AccentBlue), 4))
-                using (var pink = new Pen(Color.FromArgb(155, AccentPink), 2))
-                {
-                    glow.StartCap = LineCap.Round;
-                    glow.EndCap = LineCap.Round;
-                    blue.StartCap = LineCap.Round;
-                    blue.EndCap = LineCap.Round;
-                    pink.StartCap = LineCap.Round;
-                    pink.EndCap = LineCap.Round;
-                    graphics.DrawPath(glow, path);
-                    graphics.DrawPath(blue, path);
-                    graphics.DrawPath(pink, path);
-                }
-            }
-
-            using (var brush = new SolidBrush(Color.FromArgb(160, AccentOrange)))
-            {
-                graphics.FillEllipse(brush, bounds.Right - 70, bounds.Top + 42, 9, 9);
-                graphics.FillEllipse(brush, bounds.Right - 120, bounds.Top + 112, 5, 5);
-            }
         }
     }
 
@@ -218,7 +184,7 @@ namespace CursorTrailInstaller
 
             var close = new WindowButton("x")
             {
-                Location = new Point(ClientSize.Width - 44, 4),
+                Location = new Point(ClientSize.Width - 42, 5),
                 Anchor = AnchorStyles.Top | AnchorStyles.Right
             };
             close.Click += delegate { Close(); };
@@ -226,7 +192,7 @@ namespace CursorTrailInstaller
 
             var minimize = new WindowButton("-")
             {
-                Location = new Point(ClientSize.Width - 82, 4),
+                Location = new Point(ClientSize.Width - 78, 5),
                 Anchor = AnchorStyles.Top | AnchorStyles.Right
             };
             minimize.Click += delegate { WindowState = FormWindowState.Minimized; };
@@ -272,19 +238,17 @@ namespace CursorTrailInstaller
         {
             base.OnPaint(e);
             var rect = ClientRectangle;
-            using (var brush = new LinearGradientBrush(rect, Color.FromArgb(30, 31, 40), Color.FromArgb(17, 17, 20), 0F))
+            using (var brush = new SolidBrush(Color.FromArgb(20, 20, 23)))
             {
                 e.Graphics.FillRectangle(brush, rect);
             }
 
-            using (var glow = new LinearGradientBrush(rect, Color.FromArgb(50, UiKit.AccentBlue), Color.FromArgb(10, UiKit.AccentPink), 15F))
+            using (var soft = new LinearGradientBrush(rect, Color.FromArgb(16, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), 90F))
             {
-                e.Graphics.FillRectangle(glow, rect);
+                e.Graphics.FillRectangle(soft, rect);
             }
 
-            UiKit.DrawTrail(e.Graphics, rect);
-
-            using (var pen = new Pen(Color.FromArgb(42, 255, 255, 255)))
+            using (var pen = new Pen(Color.FromArgb(30, 255, 255, 255)))
             {
                 e.Graphics.DrawLine(pen, rect.Left, rect.Bottom - 1, rect.Right, rect.Bottom - 1);
             }
@@ -299,7 +263,7 @@ namespace CursorTrailInstaller
         public LogoView()
         {
             DoubleBuffered = true;
-            Glow = true;
+            Glow = false;
             SetStyle(ControlStyles.SupportsTransparentBackColor, true);
             BackColor = Color.Transparent;
         }
@@ -314,8 +278,8 @@ namespace CursorTrailInstaller
             var rect = ClientRectangle;
             if (Glow)
             {
-                using (var blue = new SolidBrush(Color.FromArgb(44, UiKit.AccentBlue)))
-                using (var pink = new SolidBrush(Color.FromArgb(32, UiKit.AccentPink)))
+                using (var blue = new SolidBrush(Color.FromArgb(18, 255, 255, 255)))
+                using (var pink = new SolidBrush(Color.FromArgb(12, 255, 255, 255)))
                 {
                     e.Graphics.FillEllipse(blue, new Rectangle(rect.Left + 3, rect.Top + 8, rect.Width - 6, rect.Height - 10));
                     e.Graphics.FillEllipse(pink, new Rectangle(rect.Left + 13, rect.Top + 3, rect.Width - 20, rect.Height - 18));
@@ -382,7 +346,7 @@ namespace CursorTrailInstaller
 
             var fill = new Rectangle(0, 0, fillWidth, Height - 1);
             using (var path = UiKit.RoundRect(fill, Height / 2))
-            using (var brush = new LinearGradientBrush(fill, UiKit.AccentPink, UiKit.AccentBlue, 0F))
+            using (var brush = new SolidBrush(Color.FromArgb(236, 236, 240)))
             {
                 e.Graphics.FillPath(brush, path);
             }
@@ -411,12 +375,19 @@ namespace CursorTrailInstaller
             using (var pen = new Pen(BorderColor))
             {
                 e.Graphics.FillPath(fill, path);
-                e.Graphics.DrawPath(pen, path);
+                if (BorderColor.A > 0 && BorderColor.ToArgb() != BackColor.ToArgb())
+                {
+                    e.Graphics.DrawPath(pen, path);
+                }
             }
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
         }
     }
 
-    internal sealed class AccentButton : Button
+    internal sealed class AccentButton : Control
     {
         private bool hovered;
         private bool pressed;
@@ -427,8 +398,7 @@ namespace CursorTrailInstaller
         public AccentButton()
         {
             SetStyle(ControlStyles.SupportsTransparentBackColor, true);
-            FlatStyle = FlatStyle.Flat;
-            FlatAppearance.BorderSize = 0;
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
             BackColor = Color.Transparent;
             ForeColor = UiKit.Text;
             Font = UiKit.Segoe(10F, FontStyle.Bold);
@@ -472,22 +442,22 @@ namespace CursorTrailInstaller
 
             if (Primary || Danger)
             {
-                var left = Danger ? Color.FromArgb(239, 68, 68) : UiKit.AccentPink;
-                var right = Danger ? Color.FromArgb(180, 35, 35) : UiKit.AccentBlue;
+                var left = Color.FromArgb(238, 238, 242);
+                var right = Color.FromArgb(238, 238, 242);
                 if (!Enabled)
                 {
-                    left = Color.FromArgb(70, left);
-                    right = Color.FromArgb(70, right);
+                    left = Color.FromArgb(72, 72, 78);
+                    right = Color.FromArgb(72, 72, 78);
                 }
                 else if (pressed)
                 {
-                    left = ControlPaint.Dark(left);
-                    right = ControlPaint.Dark(right);
+                    left = Color.FromArgb(210, 210, 216);
+                    right = Color.FromArgb(210, 210, 216);
                 }
                 else if (hovered)
                 {
-                    left = ControlPaint.Light(left);
-                    right = ControlPaint.Light(right);
+                    left = Color.White;
+                    right = Color.White;
                 }
 
                 using (var path = UiKit.RoundRect(rect, 11))
@@ -498,41 +468,46 @@ namespace CursorTrailInstaller
             }
             else
             {
-                var fillColor = hovered ? Color.FromArgb(44, 44, 51) : UiKit.Surface2;
+                var fillColor = hovered ? Color.FromArgb(42, 42, 47) : UiKit.Surface2;
                 if (pressed)
                 {
-                    fillColor = Color.FromArgb(30, 30, 35);
+                    fillColor = Color.FromArgb(27, 27, 31);
                 }
 
                 using (var path = UiKit.RoundRect(rect, 11))
                 using (var fill = new SolidBrush(fillColor))
-                using (var pen = new Pen(UiKit.Border))
                 {
                     e.Graphics.FillPath(fill, path);
-                    e.Graphics.DrawPath(pen, path);
                 }
             }
+
+            var textColor = Enabled
+                ? (Primary || Danger ? Color.FromArgb(18, 18, 20) : UiKit.Text)
+                : Color.FromArgb(120, 120, 128);
 
             TextRenderer.DrawText(
                 e.Graphics,
                 Text,
                 Font,
                 rect,
-                Enabled ? ForeColor : Color.FromArgb(115, 115, 125),
+                textColor,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs pevent)
+        {
         }
     }
 
-    internal sealed class WindowButton : Button
+    internal sealed class WindowButton : Control
     {
         private bool hovered;
 
         public WindowButton(string text)
         {
             SetStyle(ControlStyles.SupportsTransparentBackColor, true);
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
             Text = text;
-            FlatStyle = FlatStyle.Flat;
-            FlatAppearance.BorderSize = 0;
             BackColor = Color.Transparent;
             ForeColor = UiKit.MutedText;
             Font = UiKit.Segoe(11F, FontStyle.Regular);
@@ -561,7 +536,7 @@ namespace CursorTrailInstaller
             if (hovered)
             {
                 using (var path = UiKit.RoundRect(rect, 8))
-                using (var fill = new SolidBrush(Text == "x" ? Color.FromArgb(194, 48, 62) : Color.FromArgb(36, 36, 42)))
+                using (var fill = new SolidBrush(Color.FromArgb(35, 35, 39)))
                 {
                     e.Graphics.FillPath(fill, path);
                 }
@@ -581,6 +556,10 @@ namespace CursorTrailInstaller
                     e.Graphics.DrawLine(pen, 22, 11, 12, 21);
                 }
             }
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs pevent)
+        {
         }
     }
 }

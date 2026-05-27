@@ -12,7 +12,8 @@ $workDir = Join-Path $buildDir "installer-work"
 $assetDir = Join-Path $workDir "assets"
 $payloadAppDir = Join-Path $workDir "app"
 $payloadZip = Join-Path $workDir "CursorTrailPayload.zip"
-$setupPath = Join-Path $distDir "CursorTrail-Setup-$Version-x64.exe"
+$setupPath = Join-Path $distDir "CursorTrail-Installer-$Version-x64.exe"
+$legacySetupPath = Join-Path $distDir "CursorTrail-Setup-$Version-x64.exe"
 $uninstallerPath = Join-Path $payloadAppDir "CursorTrailUninstall.exe"
 $iconPath = Join-Path $repoRoot "icon.ico"
 $setupIconPath = Join-Path $assetDir "CursorTrailSetup.ico"
@@ -88,6 +89,10 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 if (Test-Path -LiteralPath $setupPath) {
     Remove-Item -LiteralPath $setupPath -Force
+}
+
+if (Test-Path -LiteralPath $legacySetupPath) {
+    Remove-Item -LiteralPath $legacySetupPath -Force
 }
 
 & $csc /nologo /target:winexe /optimize+ /codepage:65001 /win32icon:$setupIconPath /out:$setupPath "/resource:$payloadZip,CursorTrail.Payload.zip" "/resource:$logoPath,CursorTrail.Logo.png" $commonRefs $uiSource $setupSource
