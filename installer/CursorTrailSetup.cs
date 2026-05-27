@@ -43,7 +43,7 @@ namespace CursorTrailInstaller
             "Programs",
             AppName);
 
-        private PathField pathField;
+        private EditablePathField pathField;
         private ProgressView progressBar;
         private Label statusLabel;
         private AccentButton installButton;
@@ -98,13 +98,13 @@ namespace CursorTrailInstaller
             Controls.Add(UiKit.MakeLabel("Папка установки", 9.5F, FontStyle.Bold, UiKit.MutedText, new Point(48, 326), new Size(180, 22)));
 
             selectedInstallDir = defaultInstallDir;
-            pathField = new PathField
+            pathField = new EditablePathField
             {
                 Location = new Point(48, 352),
                 Size = new Size(590, 42),
-                PathText = selectedInstallDir
+                Text = selectedInstallDir
             };
-            pathField.Click += BrowseButton_Click;
+            pathField.TextChanged += delegate { selectedInstallDir = pathField.Text; };
             Controls.Add(pathField);
 
             browseButton = new AccentButton
@@ -166,7 +166,7 @@ namespace CursorTrailInstaller
                 if (dialog.ShowDialog(this) == DialogResult.OK)
                 {
                     selectedInstallDir = dialog.SelectedPath;
-                    pathField.PathText = selectedInstallDir;
+                    pathField.Text = selectedInstallDir;
                 }
             }
         }
@@ -213,7 +213,7 @@ namespace CursorTrailInstaller
         {
             installButton.Enabled = enabled;
             browseButton.Enabled = enabled;
-            pathField.Enabled = enabled;
+            pathField.ReadOnly = !enabled;
             cancelButton.Enabled = enabled;
         }
 

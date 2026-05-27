@@ -139,6 +139,15 @@ namespace CursorTrailInstaller
         public static void DrawTrail(Graphics graphics, Rectangle bounds)
         {
         }
+
+        public static void PaintParentBackground(Control control, PaintEventArgs e)
+        {
+            var color = control.Parent != null ? control.Parent.BackColor : Background;
+            using (var brush = new SolidBrush(color))
+            {
+                e.Graphics.FillRectangle(brush, control.ClientRectangle);
+            }
+        }
     }
 
     internal class InstallerShellForm : Form
@@ -354,47 +363,94 @@ namespace CursorTrailInstaller
         }
     }
 
-    internal sealed class PathField : Control
+    internal sealed class EditablePathField : UserControl
     {
         private bool hovered;
-        private string pathText;
+        private readonly TextBox textBox;
 
-        public string PathText
+        public override string Text
         {
-            get { return pathText; }
+            get { return textBox.Text; }
             set
             {
-                pathText = value ?? string.Empty;
+                textBox.Text = value ?? string.Empty;
+            }
+        }
+
+        public bool ReadOnly
+        {
+            get { return textBox.ReadOnly; }
+            set
+            {
+                textBox.ReadOnly = value;
+                textBox.ForeColor = value ? Color.FromArgb(150, 150, 158) : UiKit.Text;
                 Invalidate();
             }
         }
 
-        public PathField()
+        public EditablePathField()
         {
             SetStyle(ControlStyles.SupportsTransparentBackColor, true);
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
             BackColor = Color.Transparent;
-            Cursor = Cursors.Hand;
             Font = UiKit.Segoe(10.2F, FontStyle.Regular);
             Size = new Size(590, 42);
+
+            textBox = new TextBox
+            {
+                BorderStyle = BorderStyle.None,
+                BackColor = Color.FromArgb(32, 32, 36),
+                ForeColor = UiKit.Text,
+                Font = UiKit.Segoe(10.2F, FontStyle.Regular),
+                Location = new Point(14, 12),
+                Size = new Size(Width - 28, 20),
+                TabStop = true
+            };
+            textBox.MouseEnter += delegate { SetHovered(true); };
+            textBox.MouseLeave += delegate { UpdateHoverFromCursor(); };
+            textBox.TextChanged += delegate { OnTextChanged(EventArgs.Empty); };
+            Controls.Add(textBox);
         }
 
         protected override void OnMouseEnter(EventArgs e)
         {
-            hovered = true;
-            Invalidate();
+            SetHovered(true);
             base.OnMouseEnter(e);
         }
 
         protected override void OnMouseLeave(EventArgs e)
         {
-            hovered = false;
-            Invalidate();
+            UpdateHoverFromCursor();
             base.OnMouseLeave(e);
+        }
+
+        protected override void OnClick(EventArgs e)
+        {
+            textBox.Focus();
+            base.OnClick(e);
+        }
+
+        protected override void OnEnter(EventArgs e)
+        {
+            textBox.Focus();
+            base.OnEnter(e);
+        }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            if (textBox == null)
+            {
+                return;
+            }
+
+            textBox.Location = new Point(14, Math.Max(0, (Height - textBox.Height) / 2 + 1));
+            textBox.Size = new Size(Math.Max(10, Width - 28), textBox.Height);
         }
 
         protected override void OnPaint(PaintEventArgs e)
         {
+            UiKit.PaintParentBackground(this, e);
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             var rect = new Rectangle(0, 0, Width - 1, Height - 1);
             var fillColor = Enabled
@@ -407,18 +463,27 @@ namespace CursorTrailInstaller
                 e.Graphics.FillPath(fill, path);
             }
 
-            var textRect = new Rectangle(14, 0, Width - 28, Height);
-            TextRenderer.DrawText(
-                e.Graphics,
-                PathText,
-                Font,
-                textRect,
-                Enabled ? UiKit.Text : Color.FromArgb(120, 120, 128),
-                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            textBox.BackColor = fillColor;
         }
 
         protected override void OnPaintBackground(PaintEventArgs pevent)
         {
+        }
+
+        private void SetHovered(bool value)
+        {
+            if (hovered == value)
+            {
+                return;
+            }
+
+            hovered = value;
+            Invalidate();
+        }
+
+        private void UpdateHoverFromCursor()
+        {
+            SetHovered(ClientRectangle.Contains(PointToClient(Cursor.Position)));
         }
     }
 
@@ -438,6 +503,7 @@ namespace CursorTrailInstaller
 
         protected override void OnPaint(PaintEventArgs e)
         {
+            UiKit.PaintParentBackground(this, e);
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             var rect = new Rectangle(0, 0, Width - 1, Height - 1);
             using (var path = UiKit.RoundRect(rect, Radius))
@@ -507,6 +573,7 @@ namespace CursorTrailInstaller
 
         protected override void OnPaint(PaintEventArgs e)
         {
+            UiKit.PaintParentBackground(this, e);
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             var rect = new Rectangle(0, 0, Width - 1, Height - 1);
 
@@ -601,6 +668,7 @@ namespace CursorTrailInstaller
 
         protected override void OnPaint(PaintEventArgs e)
         {
+            UiKit.PaintParentBackground(this, e);
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             var rect = new Rectangle(0, 0, Width - 1, Height - 1);
             if (hovered)
