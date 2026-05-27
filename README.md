@@ -37,11 +37,11 @@ Cursor Trail — небольшое Windows-приложение на Python и 
 
 ## Скачать
 
-Готовые `.exe` сборки удобнее публиковать в GitHub Releases:
+Готовая Windows-сборка опубликована в GitHub Releases:
 
 https://github.com/zxckurayami/Cursor-Trail/releases
 
-Локальная сборка в этой рабочей папке находится в `dist\Cursor Trail\Cursor Trail.exe`, но папка `dist` не хранится в git: PyInstaller кладёт туда сотни мегабайт зависимостей, а часть файлов превышает лимиты GitHub для обычного репозитория.
+Скачайте архив `Cursor-Trail-v1.1-windows-x64.zip`, распакуйте его в удобную папку и запустите `Cursor Trail.exe`.
 
 ## Технологии
 
