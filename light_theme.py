@@ -1,91 +1,80 @@
-# --- Стили для переключателей (ToggleSwitch) в светлой теме ---
-def toggle_active_style():
-    return """
-        QPushButton {
-            background: #fff;
-            color: #232323;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            font-weight: bold;
-        }
+"""Light theme styles and utilities.
+
+This module provides a LightThemeMixin and helper functions for
+producing consistent widget styles. It avoids duplicating toggle
+button CSS by using a small generator function.
+"""
+
+import sys
+from PySide6.QtCore import Qt, QPointF, QRectF, QUrl, QEvent, QTimer
+from PySide6.QtGui import QPixmap, QPainter, QImage, QColor, QLinearGradient, QPainterPath, QPen
+from PySide6.QtWidgets import QApplication, QGraphicsScene, QGraphicsPixmapItem, QGraphicsBlurEffect
+try:
+    from PySide6.QtGui import QSurfaceFormat
+except Exception:
+    QSurfaceFormat = None
+
+# Constants
+ICON_SIZE = 36
+AUTHOR_FONT_SIZE = 10
+
+def toggle_btn_style(active: bool, left: bool, dark: bool) -> str:
+    """Return stylesheet for a toggle button.
+
+    Parameters:
+        active: whether this half is active/on
+        left: whether this is the left half (affects corner radii)
+        dark: whether dark theme colors should be used
     """
+    if dark:
+        bg = "#232323" if active else "#444"
+        fg = "#fff" if active else "#888"
+        border = "#2a2a2a"
+    else:
+        bg = "#fff" if active else "#e0e0e0"
+        fg = "#232323" if active else "#888"
+        border = "#e0e0e0" if active else "#d6d6d6"
+    radius_left = "8px" if left else "0px"
+    radius_right = "8px" if not left else "0px"
+    font_weight = "bold" if active else "normal"
+    return f"""
+        QPushButton {{
+            background: {bg};
+            color: {fg};
+            border: 1px solid {border};
+            border-top-left-radius: {radius_left};
+            border-bottom-left-radius: {radius_left};
+            border-top-right-radius: {radius_right};
+            border-bottom-right-radius: {radius_right};
+            font-weight: {font_weight};
+        }}
+    """
+
+# Backwards-compatible wrappers (old API)
+def toggle_active_style():
+    return toggle_btn_style(active=True, left=False, dark=False)
 
 def toggle_inactive_style():
-    return """
-        QPushButton {
-            background: #e0e0e0;
-            color: #888;
-            border: 1px solid #d6d6d6;
-            border-radius: 8px;
-        }
-    """
+    return toggle_btn_style(active=False, left=False, dark=False)
 
-# Персонализованные стили для левой/правой кнопок переключателя
 def toggle_active_left_style():
-    return """
-        QPushButton {
-            background: #fff;
-            color: #232323;
-            border: 1px solid #e0e0e0;
-            border-top-left-radius: 8px;
-            border-bottom-left-radius: 8px;
-            border-top-right-radius: 0px;
-            border-bottom-right-radius: 0px;
-            font-weight: bold;
-        }
-    """
+    return toggle_btn_style(active=True, left=True, dark=False)
 
 def toggle_active_right_style():
-    return """
-        QPushButton {
-            background: #fff;
-            color: #232323;
-            border: 1px solid #e0e0e0;
-            border-top-right-radius: 8px;
-            border-bottom-right-radius: 8px;
-            border-top-left-radius: 0px;
-            border-bottom-left-radius: 0px;
-            font-weight: bold;
-        }
-    """
+    return toggle_btn_style(active=True, left=False, dark=False)
 
 def toggle_inactive_left_style():
-    return """
-        QPushButton {
-            background: #e0e0e0;
-            color: #888;
-            border: 1px solid #d6d6d6;
-            border-top-left-radius: 8px;
-            border-bottom-left-radius: 8px;
-            border-top-right-radius: 0px;
-            border-bottom-right-radius: 0px;
-        }
-    """
+    return toggle_btn_style(active=False, left=True, dark=False)
 
 def toggle_inactive_right_style():
-    return """
-        QPushButton {
-            background: #e0e0e0;
-            color: #888;
-            border: 1px solid #d6d6d6;
-            border-top-right-radius: 8px;
-            border-bottom-right-radius: 8px;
-            border-top-left-radius: 0px;
-            border-bottom-left-radius: 0px;
-        }
-    """
-# light_theme.py
-# UI компоненты и стили для светлой темы
-from PyQt5.QtWidgets import *
-from PyQt5.QtCore import *
-from PyQt5.QtGui import *
-
+    return toggle_btn_style(active=False, left=False, dark=False)
 class LightThemeMixin:
+    """Mixin to apply light theme styles to Qt widgets."""
     def apply_menu_style(self, widget):
         widget.setStyleSheet("""
             QWidget {
                 background: #f5f5f5;
-                border-radius: 12px;
+                border-radius: 24px;
                 border: 1px solid #e0e0e0;
             }
         """)
@@ -102,57 +91,51 @@ class LightThemeMixin:
         """)
 
     def apply_gear_icon(self, label):
-        from PyQt5.QtGui import QPixmap, QPainter, QImage, QColor
-        from PyQt5.QtCore import QPointF
-        gear_img = QImage(36, 36, QImage.Format_ARGB32)
-        gear_img.fill(Qt.transparent)
+        # Use constants for sizing/colors
+        gear_img = QImage(ICON_SIZE, ICON_SIZE, QImage.Format.Format_ARGB32)
+        gear_img.fill(Qt.GlobalColor.transparent)
         painter = QPainter(gear_img)
-        painter.setRenderHint(QPainter.Antialiasing)
-        cx, cy = 18, 18
-        painter.setPen(QColor("#232323"))
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        cx, cy = ICON_SIZE / 2, ICON_SIZE / 2
+        painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor("#232323"))
-        painter.setPen(Qt.NoPen)
         painter.drawEllipse(QPointF(cx, cy), 10, 10)
         painter.setBrush(QColor("#e0e0e0"))
         painter.drawEllipse(QPointF(cx, cy), 4, 4)
         painter.end()
         label.setPixmap(QPixmap.fromImage(gear_img))
-        label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         label.raise_()
 
     def apply_author_label_style(self, label, widget):
-        label.setStyleSheet("color: #232323; font: 10pt 'Segoe UI'; background: transparent;")
+        label.setStyleSheet(f"color: #232323; font: {AUTHOR_FONT_SIZE}pt 'Segoe UI'; background: transparent;")
         label.adjustSize()
         label.move(12, widget.height() - label.height() - 12)
-        label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         label.raise_()
 
     def paintEvent(self, event, widget):
+        # Simple solid / translucent panel painting without blur
         painter = QPainter(widget)
-        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = widget.rect()
-        from PyQt5.QtGui import QLinearGradient, QPainterPath, QColor, QPen
-        from PyQt5.QtCore import QRectF
-        grad = QLinearGradient(rect.topLeft(), rect.bottomRight())
-        grad.setColorAt(0, QColor("#f5f5f5"))
-        grad.setColorAt(0.5, QColor("#ffffff"))
-        grad.setColorAt(1, QColor("#e0e0e0"))
         path = QPainterPath()
-        path.addRoundedRect(QRectF(rect.adjusted(1,1,-1,-1)), 12, 12)
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(grad)
+        radius = 24  # изменённый радиус закругления (в пикселях)
+        path.addRoundedRect(QRectF(rect), radius, radius)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(255, 255, 255, 255))
         painter.drawPath(path)
-        pen = QPen(QColor("#bdbdbd"), 2)
+        pen = QPen(QColor(0, 0, 0, 30), 1)
         painter.setPen(pen)
-        painter.setBrush(Qt.NoBrush)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawPath(path)
+        painter.end()
+
     def apply_theme(self):
+        # Use transparent background so rounded corners of the painted panel show
         self.setStyleSheet("""
             QDialog {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 #f5f5f5,
-                    stop:0.5 #ffffff,
-                    stop:1 #e0e0e0);
+                background: transparent;
                 border-radius: 12px;
             }
             QLabel {
@@ -163,7 +146,7 @@ class LightThemeMixin:
                 background: #f5f5f5;
                 color: #232323;
                 border: 1px solid #e0e0e0;
-                border-radius: 8px;
+                border-radius: 12px;
                 padding: 10px;
                 font: bold 14pt 'Segoe UI';
             }
@@ -218,7 +201,7 @@ class LightThemeMixin:
                 color: #232323;
                 selection-background-color: #e0e0e0;
                 selection-color: #232323;
-                border-radius: 8px;
+                border-radius: 0px;
                 padding: 4px;
             }
         """)
@@ -249,3 +232,28 @@ class LightThemeMixin:
                     color: #232323;
                 }
             """
+
+
+    def get_color_dialog_stylesheet() -> str:
+        """Return a stylesheet for QColorDialog that matches the light theme."""
+        return """
+            QWidget {
+                background: #f5f5f5;
+                color: #232323;
+            }
+            QColorDialog QWidget { background: #f5f5f5; }
+            QPushButton { background: #ffffff; color: #232323; border: 1px solid #e0e0e0; }
+            QPushButton:hover { background: #e0e0e0; }
+            QSlider::groove:horizontal { background: #e0e0e0; }
+            QComboBox, QSpinBox { background: #ffffff; color: #232323; }
+        """
+    def enable_blur_background(self, widget):
+        # Ensure the dialog supports transparent regions so rounded corners clip the window
+        try:
+            widget.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+            widget.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
+            widget.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+        except Exception:
+            pass
+
+    # Dynamic blur/eventFilter removed — no dynamic updates needed without blur

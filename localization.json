@@ -24,7 +24,15 @@
         "theme_light": "Светлая",
         "theme_dark": "Тёмная",
         "theme_system": "Как в системе",
-        "pixel_trail": "Пиксель трейл"
+        "pixel_trail": "Пиксель трейл",
+        "profiles": "Профили",
+        "save_profile": "Сохранить профиль",
+        "load_profile": "Загрузить профиль",
+        "delete_profile": "Удалить профиль",
+        "profile_selected": "Выбранный профиль",
+        "profile_name": "Имя профиля"
+        ,
+        "(no_profiles)": "(нет профилей)"
     },
     "en": {
         "settings": "Settings",
@@ -51,7 +59,15 @@
         "theme_light": "Light",
         "theme_dark": "Dark",
         "theme_system": "System",
-        "pixel_trail": "Pixel Trail"
+        "pixel_trail": "Pixel Trail",
+        "profiles": "Profiles",
+        "save_profile": "Save Profile",
+        "load_profile": "Load Profile",
+        "delete_profile": "Delete Profile",
+        "profile_selected": "Selected Profile",
+        "profile_name": "Profile Name"
+        ,
+        "(no_profiles)": "(no profiles)"
     },
     "zh": {
         "settings": "设置",
@@ -78,7 +94,15 @@
         "theme_light": "浅色",
         "theme_dark": "深色",
         "theme_system": "跟随系统",
-        "pixel_trail": "像素轨迹"
+        "pixel_trail": "像素轨迹",
+        "profiles": "配置",
+        "save_profile": "保存配置",
+        "load_profile": "加载配置",
+        "delete_profile": "删除配置",
+        "profile_selected": "选择的配置",
+        "profile_name": "配置名称"
+        ,
+        "(no_profiles)": "(无配置)"
     },
     "ja": {
         "settings": "設定",
@@ -105,6 +129,14 @@
         "theme_light": "ライト",
         "theme_dark": "ダーク",
         "theme_system": "システムと同じ",
-        "pixel_trail": "ピクセルトレイル"
+        "pixel_trail": "ピクセルトレイル",
+        "profiles": "プロファイル",
+        "save_profile": "プロファイルを保存",
+        "load_profile": "プロファイルを読み込む",
+        "delete_profile": "プロファイルを削除",
+        "profile_selected": "選択されたプロファイル",
+        "profile_name": "プロファイル名"
+        ,
+        "(no_profiles)": "(プロファイルがありません)"
     }
 }

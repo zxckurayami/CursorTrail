@@ -1,4 +1,28 @@
-# --- Стили для переключателей (ToggleSwitch) в тёмной теме ---
+"""Dark theme styles and utilities.
+
+This module mirrors `light_theme.py` but with dark palette values.
+"""
+
+import sys
+from PySide6.QtCore import Qt, QPointF, QRectF, QUrl, QEvent, QTimer
+from PySide6.QtGui import QPixmap, QPainter, QImage, QColor, QLinearGradient, QPainterPath, QPen
+from PySide6.QtWidgets import QApplication, QGraphicsScene, QGraphicsPixmapItem, QGraphicsBlurEffect
+try:
+    # Qt 6 moved some blur/backends; QGraphicsBlurEffect is still in QtWidgets but platform-specific
+    from PySide6.QtGui import QSurfaceFormat
+except Exception:
+    QSurfaceFormat = None
+
+# Для системного блюра Windows
+if sys.platform == "win32":
+    import ctypes
+    import ctypes.wintypes
+
+# Constants (match light_theme defaults)
+ICON_SIZE = 36
+AUTHOR_FONT_SIZE = 10
+
+# Reuse the same toggle generator wrappers to maintain API
 def toggle_active_style():
     return """
         QPushButton {
@@ -20,72 +44,47 @@ def toggle_inactive_style():
         }
     """
 
-# Персонализованные стили для левой/правой кнопок переключателя (тёмная тема)
-def toggle_active_left_style():
-    return """
-        QPushButton {
-            background: #232323;
-            color: #fff;
-            border: 1px solid #2a2a2a;
-            border-top-left-radius: 8px;
-            border-bottom-left-radius: 8px;
-            border-top-right-radius: 0px;
-            border-bottom-right-radius: 0px;
-            font-weight: bold;
-        }
+def toggle_btn_style(active: bool, left: bool) -> str:
+    bg = "#232323" if active else "#444"
+    fg = "#fff" if active else "#888"
+    border = "#2a2a2a"
+    radius_left = "8px" if left else "0px"
+    radius_right = "8px" if not left else "0px"
+    font_weight = "bold" if active else "normal"
+    return f"""
+        QPushButton {{
+            background: {bg};
+            color: {fg};
+            border: 1px solid {border};
+            border-top-left-radius: {radius_left};
+            border-bottom-left-radius: {radius_left};
+            border-top-right-radius: {radius_right};
+            border-bottom-right-radius: {radius_right};
+            font-weight: {font_weight};
+        }}
     """
+
+# Backwards-compatible wrappers for left/right using half-styles
+def toggle_active_left_style():
+    return toggle_btn_style(True, True)
 
 def toggle_active_right_style():
-    return """
-        QPushButton {
-            background: #232323;
-            color: #fff;
-            border: 1px solid #2a2a2a;
-            border-top-right-radius: 8px;
-            border-bottom-right-radius: 8px;
-            border-top-left-radius: 0px;
-            border-bottom-left-radius: 0px;
-            font-weight: bold;
-        }
-    """
+    return toggle_btn_style(True, False)
 
 def toggle_inactive_left_style():
-    return """
-        QPushButton {
-            background: #444;
-            color: #888;
-            border: 1px solid #2a2a2a;
-            border-top-left-radius: 8px;
-            border-bottom-left-radius: 8px;
-            border-top-right-radius: 0px;
-            border-bottom-right-radius: 0px;
-        }
-    """
+    return toggle_btn_style(False, True)
 
 def toggle_inactive_right_style():
-    return """
-        QPushButton {
-            background: #444;
-            color: #888;
-            border: 1px solid #2a2a2a;
-            border-top-right-radius: 8px;
-            border-bottom-right-radius: 8px;
-            border-top-left-radius: 0px;
-            border-bottom-left-radius: 0px;
-        }
-    """
-# dark_theme.py
-# UI компоненты и стили для тёмной темы
-from PyQt5.QtWidgets import *
-from PyQt5.QtCore import *
-from PyQt5.QtGui import *
+    return toggle_btn_style(False, False)
 
 class DarkThemeMixin:
+    """Mixin for applying dark theme to PyQt6 widgets."""
+
     def apply_menu_style(self, widget):
         widget.setStyleSheet("""
             QWidget {
                 background: #141414;
-                border-radius: 12px;
+                border-radius: 24px;
                 border: 1px solid #232323;
             }
         """)
@@ -102,56 +101,74 @@ class DarkThemeMixin:
         """)
 
     def apply_gear_icon(self, label):
-        from PyQt5.QtGui import QPixmap, QPainter, QImage, QColor
-        from PyQt5.QtCore import QPointF
-        gear_img = QImage(36, 36, QImage.Format_ARGB32)
-        gear_img.fill(Qt.transparent)
+        gear_img = QImage(ICON_SIZE, ICON_SIZE, QImage.Format.Format_ARGB32)
+        gear_img.fill(Qt.GlobalColor.transparent)
         painter = QPainter(gear_img)
-        painter.setRenderHint(QPainter.Antialiasing)
-        cx, cy = 18, 18
-        painter.setPen(Qt.NoPen)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        cx, cy = ICON_SIZE / 2, ICON_SIZE / 2
+        painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor("#fff"))
         painter.drawEllipse(QPointF(cx, cy), 10, 10)
         painter.setBrush(QColor("#181818"))
         painter.drawEllipse(QPointF(cx, cy), 4, 4)
         painter.end()
         label.setPixmap(QPixmap.fromImage(gear_img))
-        label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         label.raise_()
 
     def apply_author_label_style(self, label, widget):
-        label.setStyleSheet("color: #fff; font: 10pt 'Segoe UI'; background: transparent;")
+        label.setStyleSheet(f"color: #fff; font: {AUTHOR_FONT_SIZE}pt 'Segoe UI'; background: transparent;")
         label.adjustSize()
         label.move(12, widget.height() - label.height() - 12)
-        label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         label.raise_()
 
+    def enable_windows_blur(self):
+        """Enable Acrylic blur on Windows 10+."""
+        if sys.platform != "win32":
+            return
+        hwnd = self.winId().__int__()
+        class ACCENTPOLICY(ctypes.Structure):
+            _fields_ = [("nAccentState", ctypes.c_int),
+                        ("nFlags", ctypes.c_int),
+                        ("nColor", ctypes.c_uint),
+                        ("nAnimationId", ctypes.c_int)]
+        class WINCOMPATTRDATA(ctypes.Structure):
+            _fields_ = [("nAttribute", ctypes.c_int),
+                        ("pData", ctypes.c_void_p),
+                        ("ulDataSize", ctypes.c_size_t)]
+        accent = ACCENTPOLICY()
+        accent.nAccentState = 4  # ACCENT_ENABLE_ACRYLICBLURBEHIND
+        accent.nFlags = 2
+        accent.nColor = 0x99000000  # ARGB
+        data = WINCOMPATTRDATA()
+        data.nAttribute = 19  # WCA_ACCENT_POLICY
+        data.pData = ctypes.byref(accent)
+        data.ulDataSize = ctypes.sizeof(accent)
+        ctypes.windll.user32.SetWindowCompositionAttribute(hwnd, ctypes.byref(data))
+
     def paintEvent(self, event, widget):
+        """Draw dark translucent background with optional blur."""
         painter = QPainter(widget)
-        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = widget.rect()
-        from PyQt5.QtGui import QLinearGradient, QPainterPath, QColor, QPen
-        from PyQt5.QtCore import QRectF
-        grad = QLinearGradient(rect.topLeft(), rect.bottomRight())
-        grad.setColorAt(0, QColor("#141414"))
-        grad.setColorAt(0.5, QColor("#181818"))
-        grad.setColorAt(1, QColor("#141414"))
+        radius = 24  # увеличенный радиус скругления
         path = QPainterPath()
-        path.addRoundedRect(QRectF(rect.adjusted(1,1,-1,-1)), 12, 12)
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(grad)
+        path.addRoundedRect(QRectF(rect), radius, radius)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(16, 16, 16, 255))
         painter.drawPath(path)
-        pen = QPen(QColor("#232323"), 2)
+        pen = QPen(QColor(0, 0, 0, 120), 1)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
         painter.setPen(pen)
-        painter.setBrush(Qt.NoBrush)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawPath(path)
+        painter.end()
+
     def apply_theme(self):
         self.setStyleSheet("""
             QDialog {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 #181818,
-                    stop:0.5 #232323,
-                    stop:1 #181818);
+                background: transparent;
                 border-radius: 12px;
             }
             QLabel {
@@ -162,7 +179,7 @@ class DarkThemeMixin:
                 background: #232323;
                 color: #fff;
                 border: 1px solid #2a2a2a;
-                border-radius: 8px;
+                border-radius: 12px;
                 padding: 10px;
                 font: bold 14pt 'Segoe UI';
             }
@@ -217,7 +234,7 @@ class DarkThemeMixin:
                 color: #fff;
                 selection-background-color: #444;
                 selection-color: #fff;
-                border-radius: 8px;
+                border-radius: 0px;
                 padding: 4px;
             }
         """)
@@ -248,3 +265,43 @@ class DarkThemeMixin:
                     color: #fff;
                 }
             """
+
+
+    def get_color_dialog_stylesheet() -> str:
+        """Return a stylesheet for QColorDialog that matches the dark theme."""
+        return """
+            QWidget {
+                background: #141414;
+                color: #fff;
+            }
+            QColorDialog QWidget { background: #141414; }
+            QPushButton { background: #2b2b2b; color: #fff; border: 1px solid #232323; }
+            QPushButton:hover { background: #333; }
+            QSlider::groove:horizontal { background: #232323; }
+            QComboBox, QSpinBox { background: #232323; color: #fff; }
+        """
+    def enable_blur_background(self, widget):
+        # Ensure the dialog supports transparent regions so rounded corners clip the window
+        try:
+            widget.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+            widget.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
+            widget.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+        except Exception:
+            pass
+
+    def eventFilter(self, watched, event):
+        try:
+            if event.type() in (QEvent.Move, QEvent.Resize, QEvent.Show):
+                try:
+                    watched.update()
+                except Exception:
+                    pass
+            elif event.type() == QEvent.Hide:
+                try:
+                    if hasattr(self, '_dynamic_blur_timer'):
+                        self._dynamic_blur_timer.stop()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        return False

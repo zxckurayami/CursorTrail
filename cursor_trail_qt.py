@@ -1,19 +1,45 @@
 import sys, os, json, random, math, colorsys, subprocess
-from PyQt5.QtWidgets import (
-    QApplication, QWidget, QSlider, QColorDialog, QPushButton, QLabel, QVBoxLayout,
-    QHBoxLayout, QDialog, QCheckBox, QFrame, QGridLayout, QSystemTrayIcon, QMenu, QStyle, QListWidget, QListWidgetItem, QAbstractItemView, QScrollArea, QComboBox
+import logging
+from PySide6.QtWidgets import (
+    QApplication, QWidget, QStackedWidget, QSlider, QColorDialog, QPushButton, QLabel, QVBoxLayout,
+    QHBoxLayout, QDialog, QCheckBox, QFrame, QGridLayout, QSystemTrayIcon, QMenu, QStyle, QListWidget, QListWidgetItem, QAbstractItemView, QScrollArea, QComboBox, QSizePolicy, QInputDialog
 )
-from PyQt5.QtCore import Qt, QTimer, QPoint, QRect, QPointF, QSize, QRectF, pyqtSignal
-from PyQt5.QtGui import QPainter, QColor, QPen, QCursor, QIcon, QPainterPath, QFont
+from PySide6.QtCore import Qt, QTimer, QPoint, QRect, QPointF, QSize, QRectF, QUrl, QPropertyAnimation, QEasingCurve, Signal, Property, Slot
+from PySide6.QtGui import QPainter, QColor, QPen, QCursor, QIcon, QPainterPath, QFont, QSurfaceFormat, QLinearGradient, QPixmap
 from collections import deque
-from PyQt5.QtQuickWidgets import QQuickWidget
-from PyQt5.QtCore import QUrl
-from PyQt5.QtGui import QSurfaceFormat
+from PySide6.QtQuickWidgets import QQuickWidget
+
+
+def themed_get_color(initial, parent=None, dark=False):
+    dlg = QColorDialog(parent)
+    dlg.setCurrentColor(initial if isinstance(initial, QColor) else QColor(initial))
+    # try to use theme-provided stylesheet functions
+    try:
+        if dark:
+            from dark_theme import get_color_dialog_stylesheet
+        else:
+            from light_theme import get_color_dialog_stylesheet
+        css = get_color_dialog_stylesheet()
+        if css:
+            dlg.setStyleSheet(css)
+    except Exception:
+        # fallback simple style
+        if dark:
+            dlg.setStyleSheet("QWidget { background: #2b2b2b; color: #fff; } QPushButton { background: #3a3a3a; color: #fff; }")
+        else:
+            dlg.setStyleSheet("QWidget { background: #f5f5f5; color: #232323; } QPushButton { background: #ffffff; color: #232323; }")
+    if dlg.exec():
+        return dlg.selectedColor()
+    return QColor()
 
 if sys.platform == "win32":
     CREATE_NO_WINDOW = 0x08000000
 else:
     CREATE_NO_WINDOW = 0
+
+# Configure simple logging for the application
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(name)s: %(message)s')
 
 def hex_to_qcolor(hex_color):
     hex_color = hex_color.lstrip('#')
@@ -26,6 +52,12 @@ def get_settings_path():
         return os.path.join(os.path.dirname(__file__), 'settings.json')
 
 class ToggleSwitch(QWidget):
+    """Simple two-button toggle widget.
+
+    Signals:
+        valueChanged(bool): emitted when toggle state changes.
+    """
+    valueChanged = Signal(bool)
     def set_dark_theme(self, enabled):
         if enabled:
             from dark_theme import (
@@ -66,7 +98,9 @@ class ToggleSwitch(QWidget):
         self.on_btn = QPushButton("On")
         for btn in [self.off_btn, self.on_btn]:
             btn.setFixedSize(64, 40)
-            btn.setFont(QFont("Segoe UI", 11, QFont.Bold))
+            f = QFont("Segoe UI", 11)
+            f.setBold(True)
+            btn.setFont(f)
         self.off_btn.clicked.connect(lambda: self.setValue(False))
         self.on_btn.clicked.connect(lambda: self.setValue(True))
         layout.addWidget(self.off_btn)
@@ -74,6 +108,7 @@ class ToggleSwitch(QWidget):
         self.setValue(value)
 
     def setValue(self, value):
+        old = getattr(self, '_value', None)
         self.value = value
         # Автоматически применять текущую тему
         parent = self.parent()
@@ -92,10 +127,14 @@ class ToggleSwitch(QWidget):
 
     @value.setter
     def value(self, val):
+        prev = getattr(self, '_value', None)
         self._value = val
-
-    from PyQt5.QtCore import pyqtSignal
-    valueChanged = pyqtSignal(bool)
+        # Emit signal when value actually changes
+        try:
+            if prev is None or prev != val:
+                self.valueChanged.emit(bool(val))
+        except Exception:
+            logger.debug('Failed to emit valueChanged signal', exc_info=True)
 
 class ColorSliderWidget(QWidget):
     def __init__(self, colors, parent=None):
@@ -108,7 +147,7 @@ class ColorSliderWidget(QWidget):
         self.drag_index = None
         self.drag_offset = 0
         self.rects = []
-        self.setSizePolicy(self.sizePolicy().Expanding, self.sizePolicy().Fixed)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
     def set_colors(self, colors):
         self.colors = list(colors)
@@ -116,7 +155,7 @@ class ColorSliderWidget(QWidget):
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         margin = 4
         btn_w, btn_h = 48, 36
         spacing = 8
@@ -125,30 +164,31 @@ class ColorSliderWidget(QWidget):
         for i, color in enumerate(self.colors):
             rect = QRect(x, (self.height()-btn_h)//2, btn_w, btn_h)
             self.rects.append(rect)
-            painter.setPen(Qt.NoPen)
+            painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QColor(color))
             painter.drawRoundedRect(rect, 8, 8)
             # Обводка
             if i == self.selected:
                 painter.setPen(QColor("#232323"))
-                painter.setBrush(Qt.NoBrush)
+                painter.setBrush(Qt.BrushStyle.NoBrush)
                 painter.drawRoundedRect(rect.adjusted(-2,-2,2,2), 10, 10)
             x += btn_w + spacing
         self.setMinimumWidth(x+margin)
 
     def mousePressEvent(self, event):
         for i, rect in enumerate(self.rects):
-            if rect.contains(event.pos()):
+            p = event.position().toPoint()
+            if rect.contains(p):
                 self.selected = i
                 self.dragging = True
                 self.drag_index = i
-                self.drag_offset = event.pos().x() - rect.x()
+                self.drag_offset = p.x() - rect.x()
                 self.update()
                 break
 
     def mouseMoveEvent(self, event):
         if self.dragging and self.drag_index is not None:
-            x = event.pos().x() - self.drag_offset
+            x = event.position().toPoint().x() - self.drag_offset
             # Определяем новую позицию
             new_index = self.drag_index
             for i, rect in enumerate(self.rects):
@@ -171,8 +211,9 @@ class ColorSliderWidget(QWidget):
             self.onOrderChanged(self.colors)
         # Открыть QColorDialog по клику
         for i, rect in enumerate(self.rects):
-            if rect.contains(event.pos()):
-                color = QColorDialog.getColor(QColor(self.colors[i]), self)
+            p = event.position().toPoint()
+            if rect.contains(p):
+                color = themed_get_color(QColor(self.colors[i]), self, getattr(self, 'dark_theme_enabled', False))
                 if color.isValid():
                     self.colors[i] = color.name()
                     self.selected = i
@@ -200,7 +241,7 @@ class GradientSliderWidget(QWidget):
         self.knob_radius = 16
         self.knob_border = 3
         self.knob_rects = []
-        self.setSizePolicy(self.sizePolicy().Expanding, self.sizePolicy().Fixed)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
     def set_colors(self, colors):
         self.colors = list(colors)
@@ -208,17 +249,16 @@ class GradientSliderWidget(QWidget):
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         margin = self.knob_radius + 6
         bar_y = self.height() // 2
         bar_h = 10
         bar_rect = QRect(margin, bar_y - bar_h // 2, self.width() - 2 * margin, bar_h)
         # Градиентная линия
-        from PyQt5.QtGui import QLinearGradient
         grad = QLinearGradient(bar_rect.left(), bar_rect.center().y(), bar_rect.right(), bar_rect.center().y())
         for i, color in enumerate(self.colors):
             grad.setColorAt(i / (len(self.colors) - 1), QColor(color))
-        painter.setPen(Qt.NoPen)
+            painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(grad)
         painter.drawRoundedRect(bar_rect, bar_h // 2, bar_h // 2)
         # Квадратные маркеры меньшего размера, без обводки
@@ -229,40 +269,40 @@ class GradientSliderWidget(QWidget):
             knob_rect = QRect(x - knob_size // 2, bar_y - knob_size // 2, knob_size, knob_size)
             self.knob_rects.append(knob_rect)
             # Маленький градиент внутри маркера для глубины
-            from PyQt5.QtGui import QLinearGradient
-            kgrad = QLinearGradient(knob_rect.topLeft(), knob_rect.bottomRight())
+            kgrad = QLinearGradient(QPointF(knob_rect.topLeft()), QPointF(knob_rect.bottomRight()))
             base_col = QColor(color)
             kgrad.setColorAt(0, base_col.lighter(115))
             kgrad.setColorAt(1, base_col.darker(115))
-            painter.setPen(Qt.NoPen)
+            painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(kgrad)
             painter.drawRoundedRect(knob_rect, 6, 6)
             # Тонкая обводка
             pen = QPen(QColor("#232323"))
             pen.setWidth(1)
             painter.setPen(pen)
-            painter.setBrush(Qt.NoBrush)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRoundedRect(knob_rect.adjusted(0,0,0,0), 6, 6)
             # Выделение (закруглённая обводка вокруг маркера)
             if i == self.selected:
                 sel_rect = knob_rect.adjusted(-3, -3, 3, 3)
                 painter.setPen(QPen(QColor("#232323"), 2))
-                painter.setBrush(Qt.NoBrush)
+                painter.setBrush(Qt.BrushStyle.NoBrush)
                 painter.drawRoundedRect(sel_rect, 8, 8)
 
     def mousePressEvent(self, event):
         for i, rect in enumerate(self.knob_rects):
-            if rect.contains(event.pos()):
+            p = event.position().toPoint()
+            if rect.contains(p):
                 self.selected = i
                 self.dragging = True
                 self.drag_index = i
-                self.drag_offset = event.pos().x() - rect.center().x()
+                self.drag_offset = p.x() - rect.center().x()
                 self.update()
                 break
 
     def mouseMoveEvent(self, event):
         if self.dragging and self.drag_index is not None:
-            x = event.pos().x() - self.drag_offset
+            x = event.position().toPoint().x() - self.drag_offset
             margin = self.knob_radius + 6
             bar_left = margin
             bar_right = self.width() - margin
@@ -286,8 +326,9 @@ class GradientSliderWidget(QWidget):
             self.onOrderChanged(self.colors)
         # Открыть QColorDialog по клику
         for i, rect in enumerate(self.knob_rects):
-            if rect.contains(event.pos()):
-                color = QColorDialog.getColor(QColor(self.colors[i]), self)
+            p = event.position().toPoint()
+            if rect.contains(p):
+                color = themed_get_color(QColor(self.colors[i]), self, getattr(self, 'dark_theme_enabled', False))
                 if color.isValid():
                     self.colors[i] = color.name()
                     self.selected = i
@@ -375,7 +416,7 @@ class ColorGradientPicker(QWidget):
         self.slider.set_colors(self.colors)
 
     def add_color(self):
-        color = QColorDialog.getColor(QColor("#ffffff"), self)
+        color = themed_get_color(QColor("#ffffff"), self, getattr(self, 'dark_theme_enabled', False))
         if color.isValid():
             insert_pos = self.slider.selected + 1
             self.colors.insert(insert_pos, color.name())
@@ -394,11 +435,19 @@ class ColorGradientPicker(QWidget):
     def get_colors(self):
         return self.slider.get_colors()
 
+    def set_colors(self, colors):
+        try:
+            self.colors = list(colors)
+            self.slider.set_colors(self.colors)
+            self.slider.update()
+        except Exception:
+            logger.exception('Failed to set colors for ColorGradientPicker')
+
 from light_theme import LightThemeMixin
 from dark_theme import DarkThemeMixin
 
 class SettingsDialog(QDialog, LightThemeMixin, DarkThemeMixin):
-    settingsApplied = pyqtSignal(tuple)  # Новый сигнал
+    settingsApplied = Signal(tuple)  # Новый сигнал
 
     def __init__(self, parent, trail_length, trail_width, gradient_colors, fade_enabled, alpha, glow_enabled, glow_color, outline_enabled, outline_color, rgb_trail_enabled, sakura_trail_enabled, current_language, pixel_trail_enabled, dark_theme_enabled):
         super().__init__(parent)
@@ -408,29 +457,68 @@ class SettingsDialog(QDialog, LightThemeMixin, DarkThemeMixin):
         self.current_language = current_language
         self.tr = parent.tr
         self.dark_theme_enabled = dark_theme_enabled  # добавлено
+        # copy profiles from parent so dialog shows existing saved profiles
+        try:
+            self._profiles = getattr(parent, '_profiles', {}) or {}
+        except Exception:
+            self._profiles = {}
+        try:
+            self.selected_profile = getattr(parent, 'selected_profile', None)
+        except Exception:
+            self.selected_profile = None
+        # ensure a default profile named 'Стандартный' exists and is selected if nothing else
+        try:
+            if not self._profiles:
+                default_name = "Стандартный"
+                self._profiles = {default_name: [
+                    trail_length, trail_width, self.gradient_colors,
+                    fade_enabled, alpha, glow_enabled, glow_color,
+                    outline_enabled, outline_color, rgb_trail_enabled,
+                    sakura_trail_enabled, current_language, pixel_trail_enabled,
+                    dark_theme_enabled
+                ]}
+                self.selected_profile = default_name
+                # persist back to parent
+                try:
+                    parent._profiles = self._profiles
+                    parent.selected_profile = default_name
+                    if hasattr(parent, 'save_settings'):
+                        parent.save_settings()
+                except Exception:
+                    pass
+        except Exception:
+            pass
         self.setWindowTitle(self.tr("settings"))
         self.setFixedSize(820, 680)
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
-        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         # Применяем тему через миксины
         if self.dark_theme_enabled:
             DarkThemeMixin.apply_theme(self)
+            # Enable blurred translucent background
+            try:
+                self.enable_blur_background(self)
+            except Exception:
+                pass
         else:
             LightThemeMixin.apply_theme(self)
+            try:
+                self.enable_blur_background(self)
+            except Exception:
+                pass
         # --- Overlay для кросс-фейда между темами ---
-        from PyQt5.QtWidgets import QWidget
-        from PyQt5.QtGui import QPixmap
         class CrossFadeOverlay(QWidget):
             def __init__(self, parent=None):
                 super().__init__(parent)
-                self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-                self.setAttribute(Qt.WA_NoSystemBackground, True)
-                self.setAttribute(Qt.WA_TranslucentBackground, True)
+                self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+                self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
+                self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
                 self.setGeometry(0, 0, parent.width(), parent.height())
                 self._pixmap_old = None
                 self._pixmap_new = None
                 self._progress = 0.0
                 self.hide()
+
             def setPixmaps(self, old, new):
                 self._pixmap_old = old
                 self._pixmap_new = new
@@ -443,8 +531,7 @@ class SettingsDialog(QDialog, LightThemeMixin, DarkThemeMixin):
                 self._progress = value
                 self.update()
 
-            from PyQt5.QtCore import pyqtProperty
-            progress = pyqtProperty(float, fget=getProgress, fset=setProgress)
+            progress = Property(float, fget=getProgress, fset=setProgress)
 
             def paintEvent(self, event):
                 if self._pixmap_old and self._pixmap_new:
@@ -485,11 +572,11 @@ class SettingsDialog(QDialog, LightThemeMixin, DarkThemeMixin):
         menu_layout.setContentsMargins(0, 44, 0, 44)
         menu_layout.setSpacing(8)
         self.tab_buttons = []
-        self.tabs = [self.tr("line"), self.tr("effects"), self.tr("settings_tab")]
+        self.tabs = [self.tr("line"), self.tr("effects"), self.tr("profiles"), self.tr("settings_tab")]
         for i, name in enumerate(self.tabs):
             btn = QPushButton(name)
             btn.setFixedHeight(48)
-            btn.setCursor(Qt.PointingHandCursor)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setCheckable(True)
             btn.setStyleSheet(self._tab_btn_style(selected=(i==0)))
             btn.clicked.connect(lambda checked, idx=i: self.select_tab(idx))
@@ -499,7 +586,6 @@ class SettingsDialog(QDialog, LightThemeMixin, DarkThemeMixin):
         main_layout.addWidget(self.menu_widget)
 
         # --- Стек вкладок ---
-        from PyQt5.QtWidgets import QStackedWidget
         self.stacked = QStackedWidget()
         main_layout.addWidget(self.stacked, 1)
 
@@ -516,7 +602,7 @@ class SettingsDialog(QDialog, LightThemeMixin, DarkThemeMixin):
         lbl_trail_length = QLabel(self.tr("trail_length"))
         lbl_trail_length.setFixedWidth(label_width)
         grid.addWidget(lbl_trail_length, 0, 0)
-        self.length_slider = QSlider(Qt.Horizontal)
+        self.length_slider = QSlider(Qt.Orientation.Horizontal)
         self.length_slider.setMinimum(5)
         self.length_slider.setMaximum(100)
         self.length_slider.setValue(trail_length)
@@ -526,7 +612,7 @@ class SettingsDialog(QDialog, LightThemeMixin, DarkThemeMixin):
         lbl_trail_width = QLabel(self.tr("trail_width"))
         lbl_trail_width.setFixedWidth(label_width)
         grid.addWidget(lbl_trail_width, 1, 0)
-        self.width_slider = QSlider(Qt.Horizontal)
+        self.width_slider = QSlider(Qt.Orientation.Horizontal)
         self.width_slider.setMinimum(1)
         self.width_slider.setMaximum(40)
         self.width_slider.setValue(trail_width)
@@ -547,7 +633,7 @@ class SettingsDialog(QDialog, LightThemeMixin, DarkThemeMixin):
         lbl_transparency = QLabel(self.tr("transparency"))
         lbl_transparency.setFixedWidth(label_width)
         grid.addWidget(lbl_transparency, 4, 0)
-        self.alpha_slider = QSlider(Qt.Horizontal)
+        self.alpha_slider = QSlider(Qt.Orientation.Horizontal)
         self.alpha_slider.setMinimum(10)
         self.alpha_slider.setMaximum(255)
         self.alpha_slider.setValue(alpha)
@@ -563,7 +649,8 @@ class SettingsDialog(QDialog, LightThemeMixin, DarkThemeMixin):
         self.glow_switch = ToggleSwitch(glow_enabled)
         self.glow_color_btn = QPushButton()
         self.glow_color_btn.setFixedSize(50, 36)
-        self.glow_color_btn.setStyleSheet(f"background: {glow_color}; border: 0px solid #bdbdbd;")
+        glow_border = '#444' if getattr(self, 'dark_theme_enabled', False) else '#bdbdbd'
+        self.glow_color_btn.setStyleSheet(f"background: {glow_color}; border: 1px solid {glow_border}; border-radius: 6px;")
         glow_layout.addWidget(self.glow_switch)
         glow_layout.addSpacing(8)
         glow_layout.addWidget(self.glow_color_btn)
@@ -581,7 +668,8 @@ class SettingsDialog(QDialog, LightThemeMixin, DarkThemeMixin):
         self.outline_switch = ToggleSwitch(outline_enabled)
         self.outline_color_btn = QPushButton()
         self.outline_color_btn.setFixedSize(50, 36)
-        self.outline_color_btn.setStyleSheet(f"background: {outline_color}; border: 0px solid #bdbdbd;")
+        outline_border = '#444' if getattr(self, 'dark_theme_enabled', False) else '#bdbdbd'
+        self.outline_color_btn.setStyleSheet(f"background: {outline_color}; border: 1px solid {outline_border}; border-radius: 6px;")
         outline_layout.addWidget(self.outline_switch)
         outline_layout.addSpacing(8)
         outline_layout.addWidget(self.outline_color_btn)
@@ -602,7 +690,7 @@ class SettingsDialog(QDialog, LightThemeMixin, DarkThemeMixin):
         self.glow_color_btn.clicked.connect(self.choose_glow_color)
         self.outline_color_btn.clicked.connect(self.choose_outline_color)
 
-        # --- Вкладка 2: Эффекты (теперь с RGB трейлом, сакурой и пиксельным трейлом) ---
+    # --- Вкладка 2: Эффекты (теперь с RGB трейлом, сакурой и пиксельным трейлом) ---
         effects_tab = QWidget()
         effects_layout = QVBoxLayout(effects_tab)
         effects_layout.setContentsMargins(44, 44, 44, 44)
@@ -685,6 +773,53 @@ class SettingsDialog(QDialog, LightThemeMixin, DarkThemeMixin):
         effects_layout.addWidget(self.apply_btn2)
         self.stacked.addWidget(effects_tab)
 
+
+        # --- Вкладка: Профили (между эффектами и настройками) ---
+        profiles_tab = QWidget()
+        profiles_layout = QVBoxLayout(profiles_tab)
+        profiles_layout.setContentsMargins(44, 44, 44, 44)
+        profiles_layout.setSpacing(12)
+
+        # Header: label + buttons on one row (aligned with other labels)
+        profiles_label = QLabel(self.tr("profiles"))
+        profiles_label.setFixedWidth(220)
+        profiles_label.setStyleSheet("font: bold 18pt 'Segoe UI';")
+        top_row = QHBoxLayout()
+        top_row.addWidget(profiles_label)
+        top_row.addStretch()
+        profiles_layout.addLayout(top_row)
+
+        # Use a combo box for profiles to match other dialogs
+        self.profiles_combo = QComboBox()
+        self.profiles_combo.setEditable(False)
+        profiles_layout.addWidget(self.profiles_combo)
+
+        # Buttons under the combo so text fits
+        prof_row = QHBoxLayout()
+        self.save_profile_btn = QPushButton(self.tr("save_profile"))
+        self.delete_profile_btn = QPushButton(self.tr("delete_profile"))
+        # make buttons a reasonable width so text fits
+        try:
+            self.save_profile_btn.setMinimumWidth(140)
+            self.delete_profile_btn.setMinimumWidth(140)
+        except Exception:
+            pass
+        prof_row.addWidget(self.save_profile_btn)
+        prof_row.addWidget(self.delete_profile_btn)
+        profiles_layout.addLayout(prof_row)
+
+        self.save_profile_btn.clicked.connect(self.save_profile)
+        self.delete_profile_btn.clicked.connect(self.delete_profile)
+
+        # At bottom: Apply button for Profiles
+        profiles_layout.addStretch()
+        self.apply_profiles_btn = QPushButton(self.tr("apply"))
+        self.apply_profiles_btn.setFixedHeight(56)
+        self.apply_profiles_btn.clicked.connect(self.apply_settings)
+        profiles_layout.addWidget(self.apply_profiles_btn)
+
+        self.stacked.addWidget(profiles_tab)
+
         # --- Вкладка 3: Настройки ---
         settings_tab = QWidget()
         settings_layout = QVBoxLayout(settings_tab)
@@ -745,8 +880,8 @@ class SettingsDialog(QDialog, LightThemeMixin, DarkThemeMixin):
         self.stacked.addWidget(settings_tab)
 
         # --- Добавляем версию справа снизу во вкладку "Настройки" ---
-        self.version_label = QLabel("Version: 1.0.1", settings_tab)
-        self.version_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self.version_label = QLabel("Version: 1.1", settings_tab)
+        self.version_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self.version_label.setStyleSheet("background: transparent;")
         self.version_label.adjustSize()
         self._update_version_label_style()
@@ -755,6 +890,46 @@ class SettingsDialog(QDialog, LightThemeMixin, DarkThemeMixin):
 
         # --- Применить стили ко всем элементам сразу после создания ---
         self._update_tab_labels_style()
+        # populate profiles list from loaded settings
+        try:
+            # ensure we use parent's latest profiles (main app loaded them on startup)
+            try:
+                parent_profiles = getattr(self.parent(), '_profiles', None)
+                if parent_profiles is not None:
+                    self._profiles = parent_profiles or self._profiles
+            except Exception:
+                pass
+            if hasattr(self, '_profiles'):
+                self._refresh_profiles_list()
+                # if no selected_profile, pick 'Стандартный' if present or first available
+                try:
+                    sel = getattr(self, 'selected_profile', None)
+                    if not sel:
+                        names = sorted(self.list_profiles())
+                        if 'Стандартный' in names:
+                            sel = 'Стандартный'
+                        elif names:
+                            sel = names[0]
+                        if sel:
+                            idx = self.profiles_combo.findText(sel)
+                            if idx >= 0:
+                                self.profiles_combo.setCurrentIndex(idx)
+                                self.selected_profile = self.profiles_combo.currentText()
+                except Exception:
+                    pass
+                # restore autosave checkbox and selection
+                try:
+                    if hasattr(self, 'autosave_chk'):
+                        self.autosave_chk.setChecked(bool(getattr(self, 'autosave_profile', False)))
+                    if hasattr(self, 'profiles_combo') and getattr(self, 'selected_profile', None):
+                        idx = self.profiles_combo.findText(getattr(self, 'selected_profile', ''))
+                        if idx >= 0:
+                            self.profiles_combo.setCurrentIndex(idx)
+                            self.selected_profile = self.profiles_combo.currentText()
+                except Exception:
+                    pass
+        except Exception:
+            pass
         self.glow_switch.set_dark_theme(self.dark_theme_enabled)
         self.outline_switch.set_dark_theme(self.dark_theme_enabled)
         self.fade_switch.set_dark_theme(self.dark_theme_enabled)
@@ -778,8 +953,8 @@ class SettingsDialog(QDialog, LightThemeMixin, DarkThemeMixin):
         else:
             LightThemeMixin.apply_close_btn_style(self, self.close_btn)
         self.close_btn.raise_()
-        self.close_btn.setAttribute(Qt.WA_TransparentForMouseEvents, False)
-        self.close_btn.setFocusPolicy(Qt.NoFocus)
+        self.close_btn.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+        self.close_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.close_btn.setVisible(True)
         # --- Кастомная иконка шестерёнки (QLabel) ---
         if not hasattr(self, 'gear_label'):
@@ -791,7 +966,7 @@ class SettingsDialog(QDialog, LightThemeMixin, DarkThemeMixin):
         else:
             LightThemeMixin.apply_gear_icon(self, self.gear_label)
         self.gear_label.raise_()
-        self.gear_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self.gear_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self.gear_label.setVisible(True)
         # --- Подпись автора (QLabel) ---
         if not hasattr(self, 'author_label'):
@@ -801,8 +976,174 @@ class SettingsDialog(QDialog, LightThemeMixin, DarkThemeMixin):
         else:
             LightThemeMixin.apply_author_label_style(self, self.author_label, self)
         self.author_label.raise_()
-        self.author_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self.author_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self.author_label.setVisible(True)
+
+    # --- Profiles methods (moved inside SettingsDialog) ---
+    def list_profiles(self):
+        return list(getattr(self, '_profiles', {}).keys())
+
+    def save_profile(self):
+        # Use a themed QInputDialog so its appearance matches the current theme
+        try:
+            dlg = QInputDialog(self)
+            dlg.setWindowTitle(self.tr('save_profile'))
+            dlg.setLabelText(self.tr('profile_name'))
+            dlg.setTextValue("")
+            try:
+                # Apply a strict light stylesheet: white background, white buttons with 1px border, black text
+                css = """
+                    QWidget { background: #ffffff; color: #000000; }
+                    QDialog { background: #ffffff; }
+                    QLabel { color: #000000; }
+                    QLineEdit { background: #ffffff; color: #000000; border: 1px solid #e0e0e0; padding: 6px; }
+                    QPushButton { background: #ffffff; color: #000000; border: 1px solid #cfcfcf; border-radius: 6px; padding: 6px 10px; }
+                    QPushButton:hover { background: #f5f5f5; }
+                    QPushButton:pressed { background: #e9e9e9; }
+                """
+                dlg.setStyleSheet(css)
+            except Exception:
+                pass
+            res = dlg.exec()
+            name = dlg.textValue() if res == QDialog.Accepted else None
+            if not name:
+                return
+        except Exception:
+            # fallback to simple static call
+            name, ok = QInputDialog.getText(self, self.tr('save_profile'), self.tr('profile_name'))
+            if not ok or not name:
+                return
+        profiles = getattr(self, '_profiles', {})
+        profiles[name] = self.get_settings()
+        self._profiles = profiles
+        # persist via parent if available
+        if hasattr(self.parent(), 'save_settings'):
+            # also update parent storage
+            try:
+                self.parent()._profiles = self._profiles
+                self.parent().save_settings()
+            except Exception:
+                pass
+        # refresh combobox and select the new profile
+        self._refresh_profiles_list()
+        try:
+            idx = self.profiles_combo.findText(name)
+            if idx >= 0:
+                self.profiles_combo.setCurrentIndex(idx)
+                self.selected_profile = name
+        except Exception:
+            pass
+        # Immediately apply saved profile to the app
+        try:
+            settings = self._profiles.get(name)
+            if settings and hasattr(self, 'settingsApplied'):
+                # emit the profile tuple so main app applies it
+                self.settingsApplied.emit(settings)
+        except Exception:
+            logger.exception('Failed to apply newly saved profile')
+
+    def load_profile(self):
+        name = self.profiles_combo.currentText() if hasattr(self, 'profiles_combo') else None
+        if not name:
+            return
+        profiles = getattr(self, '_profiles', {})
+        settings = profiles.get(name)
+        if not settings:
+            return
+        (new_trail_length, new_trail_width, new_gradient_colors,
+         new_fade_enabled, new_alpha, new_glow_enabled, new_glow_color,
+         new_outline_enabled, new_outline_color, new_rgb_trail_enabled,
+         new_sakura_trail_enabled, new_language, new_pixel_trail_enabled,
+         new_dark_theme_enabled) = settings
+        # Update controls
+        self.length_slider.setValue(new_trail_length)
+        self.width_slider.setValue(new_trail_width)
+        self.gradient_picker.set_colors(new_gradient_colors)
+        try:
+            self.fade_switch.setValue(new_fade_enabled)
+        except Exception:
+            try:
+                self.fade_switch.value = new_fade_enabled
+            except Exception:
+                pass
+        self.alpha_slider.setValue(new_alpha)
+        try:
+            self.glow_switch.setValue(new_glow_enabled)
+        except Exception:
+            try:
+                self.glow_switch.value = new_glow_enabled
+            except Exception:
+                pass
+        self.glow_color = new_glow_color
+        glow_border = '#444' if getattr(self, 'dark_theme_enabled', False) else '#bdbdbd'
+        self.glow_color_btn.setStyleSheet(f"background: {self.glow_color}; border: 1px solid {glow_border}; border-radius: 6px;")
+        try:
+            self.outline_switch.setValue(new_outline_enabled)
+        except Exception:
+            try:
+                self.outline_switch.value = new_outline_enabled
+            except Exception:
+                pass
+        self.outline_color = new_outline_color
+        outline_border = '#444' if getattr(self, 'dark_theme_enabled', False) else '#bdbdbd'
+        self.outline_color_btn.setStyleSheet(f"background: {self.outline_color}; border: 1px solid {outline_border}; border-radius: 6px;")
+        # switches update theme-sensitive visuals
+        self.rgb_trail_switch.set_dark_theme(self.dark_theme_enabled)
+        self.sakura_trail_switch.set_dark_theme(self.dark_theme_enabled)
+        self.pixel_trail_switch.set_dark_theme(self.dark_theme_enabled)
+        # language
+        try:
+            idx = list(self.lang_map.keys()).index(new_language) if new_language in self.lang_map else 0
+            self.lang_combo.setCurrentIndex(idx)
+        except Exception:
+            pass
+        # theme
+        self.theme_combo.setCurrentIndex(1 if new_dark_theme_enabled else 0)
+        # mark selected profile but do not auto-apply
+        self.selected_profile = name
+
+    def delete_profile(self):
+        name = self.profiles_combo.currentText() if hasattr(self, 'profiles_combo') else None
+        if not name:
+            return
+        profiles = getattr(self, '_profiles', {})
+        if name in profiles:
+            del profiles[name]
+            self._profiles = profiles
+            if hasattr(self.parent(), 'save_settings'):
+                try:
+                    self.parent()._profiles = self._profiles
+                    self.parent().save_settings()
+                except Exception:
+                    pass
+            self._refresh_profiles_list()
+
+    def _refresh_profiles_list(self):
+        try:
+            self.profiles_combo.blockSignals(True)
+            self.profiles_combo.clear()
+            names = sorted(self.list_profiles())
+            if not names:
+                self.profiles_combo.addItem(self.tr("(no_profiles)"))
+                self.profiles_combo.setEnabled(False)
+            else:
+                for name in names:
+                    self.profiles_combo.addItem(name)
+                self.profiles_combo.setEnabled(True)
+            # restore previous selection if available
+            sel = getattr(self, 'selected_profile', None)
+            if sel:
+                idx = self.profiles_combo.findText(sel)
+                if idx >= 0:
+                    self.profiles_combo.setCurrentIndex(idx)
+            # connect selection change to update selected_profile
+            try:
+                self.profiles_combo.currentIndexChanged.connect(lambda idx: setattr(self, 'selected_profile', self.profiles_combo.currentText()))
+            except Exception:
+                pass
+            self.profiles_combo.blockSignals(False)
+        except Exception:
+            logger.exception('Failed to refresh profiles combo')
 
     def on_theme_combo_changed(self, idx):
         # Получаем значение из data (True/False)
@@ -812,7 +1153,6 @@ class SettingsDialog(QDialog, LightThemeMixin, DarkThemeMixin):
 
     def toggle_theme(self, enabled=None):
         # --- Плавная анимация смены темы ---
-        from PyQt5.QtCore import QPropertyAnimation, QEasingCurve
         if enabled is None:
             new_theme = not self.dark_theme_enabled
         else:
@@ -820,7 +1160,6 @@ class SettingsDialog(QDialog, LightThemeMixin, DarkThemeMixin):
         if new_theme == self.dark_theme_enabled:
             return  # Нет смены
         # --- Кросс-фейд между темами ---
-        from PyQt5.QtGui import QPixmap
         # 1. Скриншот старой темы
         old_pixmap = self.grab()
         # 2. Меняем тему (но не показываем overlay)
@@ -868,8 +1207,8 @@ class SettingsDialog(QDialog, LightThemeMixin, DarkThemeMixin):
         else:
             LightThemeMixin.apply_close_btn_style(self, self.close_btn)
         self.close_btn.raise_()
-        self.close_btn.setAttribute(Qt.WA_TransparentForMouseEvents, False)
-        self.close_btn.setFocusPolicy(Qt.NoFocus)
+        self.close_btn.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+        self.close_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.close_btn.setVisible(True)
         # --- Кастомная иконка шестерёнки (QLabel) ---
         if not hasattr(self, 'gear_label'):
@@ -881,7 +1220,7 @@ class SettingsDialog(QDialog, LightThemeMixin, DarkThemeMixin):
         else:
             LightThemeMixin.apply_gear_icon(self, self.gear_label)
         self.gear_label.raise_()
-        self.gear_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self.gear_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self.gear_label.setVisible(True)
         # --- Подпись автора (QLabel) ---
         if not hasattr(self, 'author_label'):
@@ -891,7 +1230,7 @@ class SettingsDialog(QDialog, LightThemeMixin, DarkThemeMixin):
         else:
             LightThemeMixin.apply_author_label_style(self, self.author_label, self)
         self.author_label.raise_()
-        self.author_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self.author_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self.author_label.setVisible(True)
         # --- Сигналы больше не подключаем здесь ---
         self._drag_active = False
@@ -905,12 +1244,11 @@ class SettingsDialog(QDialog, LightThemeMixin, DarkThemeMixin):
         self._theme_overlay.setProgress(0.0)
         self._theme_overlay.raise_()  # Overlay всегда поверх всех элементов
         self._theme_overlay.show()
-        from PyQt5.QtCore import QPropertyAnimation
         anim = QPropertyAnimation(self._theme_overlay, b"progress", self)
         anim.setDuration(400)
         anim.setStartValue(0.0)
         anim.setEndValue(1.0)
-        anim.setEasingCurve(QEasingCurve.InOutQuad)
+        anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
         self._theme_anim = anim
         def after_fade():
             self._theme_overlay.hide()
@@ -925,11 +1263,90 @@ class SettingsDialog(QDialog, LightThemeMixin, DarkThemeMixin):
             return LightThemeMixin.tab_btn_style(self, selected)
 
     def select_tab(self, idx):
+        # Update tab button states/styles
         for i, btn in enumerate(self.tab_buttons):
             btn.setChecked(i == idx)
             btn.setStyleSheet(self._tab_btn_style(selected=(i==idx)))
-        self.stacked.setCurrentIndex(idx)
-        self._update_tab_labels_style()
+
+        # Cross-fade between current and target page
+        current_idx = self.stacked.currentIndex()
+        if current_idx == idx:
+            return
+
+        current_widget = self.stacked.widget(current_idx)
+        next_widget = self.stacked.widget(idx)
+
+        # Ensure widgets are positioned correctly for animation
+        # place both widgets to occupy the stacked widget area so child layouts keep correct positions
+        try:
+            w = self.stacked.width()
+            h = self.stacked.height()
+            current_widget.setGeometry(0, 0, w, h)
+            next_widget.setGeometry(0, 0, w, h)
+        except Exception:
+            pass
+        # make sure the next widget is visible for the fade-in (it will be made current after animation)
+        next_widget.setVisible(True)
+
+        # Prepare opacity effects
+        from PySide6.QtWidgets import QGraphicsOpacityEffect
+        from PySide6.QtCore import QPropertyAnimation
+
+        # Cancel any running animations
+        if hasattr(self, '_tab_anim_current') and getattr(self, '_tab_anim_current') is not None:
+            try:
+                self._tab_anim_current.stop()
+            except Exception:
+                pass
+        if hasattr(self, '_tab_anim_next') and getattr(self, '_tab_anim_next') is not None:
+            try:
+                self._tab_anim_next.stop()
+            except Exception:
+                pass
+
+        current_effect = QGraphicsOpacityEffect(current_widget)
+        current_widget.setGraphicsEffect(current_effect)
+        next_effect = QGraphicsOpacityEffect(next_widget)
+        next_widget.setGraphicsEffect(next_effect)
+
+        current_anim = QPropertyAnimation(current_effect, b"opacity", self)
+        current_anim.setDuration(180)
+        current_anim.setStartValue(1.0)
+        current_anim.setEndValue(0.0)
+        current_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
+
+        next_anim = QPropertyAnimation(next_effect, b"opacity", self)
+        next_anim.setDuration(180)
+        next_anim.setStartValue(0.0)
+        next_anim.setEndValue(1.0)
+        next_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
+
+        self._tab_anim_current = current_anim
+        self._tab_anim_next = next_anim
+
+        def on_finished():
+            try:
+                # finalize: set the target page and clear effects
+                self.stacked.setCurrentIndex(idx)
+                # ensure stacked-managed geometry restored
+                try:
+                    current_widget.setGeometry(0, 0, self.stacked.width(), self.stacked.height())
+                    next_widget.setGeometry(0, 0, self.stacked.width(), self.stacked.height())
+                except Exception:
+                    pass
+                current_widget.setGraphicsEffect(None)
+                next_widget.setGraphicsEffect(None)
+            finally:
+                self._tab_anim_current = None
+                self._tab_anim_next = None
+                self._update_tab_labels_style()
+
+        # Connect finish on next_anim to finalize (so page has finished appearing)
+        next_anim.finished.connect(on_finished)
+
+        # Start animations
+        current_anim.start()
+        next_anim.start()
 
     def _update_tab_labels_style(self):
         label_color = "#fff" if self.dark_theme_enabled else "#232323"
@@ -944,14 +1361,24 @@ class SettingsDialog(QDialog, LightThemeMixin, DarkThemeMixin):
             eff_layout = self.stacked.widget(1).layout().itemAt(i).widget().layout()
             lbl = eff_layout.itemAt(0).widget()
             lbl.setStyleSheet(f"color: {label_color}; {font}")
-        # Вкладка 3
-        lang_layout = self.stacked.widget(2).layout().itemAt(0).layout()
+        # Вкладка 3 (Settings is now index 3 due to Profiles tab)
+        lang_layout = self.stacked.widget(3).layout().itemAt(0).layout()
         lang_label = lang_layout.itemAt(0).widget()
         lang_label.setStyleSheet(f"color: {label_color}; {font}")
+        # Profiles header label (it's inside the profiles tab as top widget)
+        try:
+            profiles_tab = self.stacked.widget(2)
+            # first item in profiles tab layout is the top_row layout
+            top_row = profiles_tab.layout().itemAt(0).layout()
+            profiles_lbl = top_row.itemAt(0).widget()
+            if profiles_lbl is not None:
+                profiles_lbl.setStyleSheet(f"color: {label_color}; font: bold 18pt 'Segoe UI';")
+        except Exception:
+            pass
 
     def _move_version_label(self):
         # Перемещаем версию в правый нижний угол вкладки "Настройки" (ещё ниже, чем подпись автора)
-        settings_tab = self.stacked.widget(2)
+        settings_tab = self.stacked.widget(3)
         if hasattr(self, 'version_label') and self.version_label.parent() is settings_tab:
             w = settings_tab.width()
             h = settings_tab.height()
@@ -985,30 +1412,32 @@ class SettingsDialog(QDialog, LightThemeMixin, DarkThemeMixin):
             LightThemeMixin.paintEvent(self, event, self)
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
+        if event.button() == Qt.MouseButton.LeftButton:
             self._drag_active = True
-            self._drag_pos = event.globalPos() - self.frameGeometry().topLeft()
+            self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
             event.accept()
 
     def mouseMoveEvent(self, event):
-        if self._drag_active and event.buttons() & Qt.LeftButton:
-            self.move(event.globalPos() - self._drag_pos)
+        if self._drag_active and event.buttons() & Qt.MouseButton.LeftButton:
+            self.move(event.globalPosition().toPoint() - self._drag_pos)
             event.accept()
 
     def mouseReleaseEvent(self, event):
         self._drag_active = False
 
     def choose_glow_color(self):
-        color = QColorDialog.getColor(QColor(self.glow_color), self)
+        color = themed_get_color(QColor(self.glow_color), self, getattr(self, 'dark_theme_enabled', False))
         if color.isValid():
             self.glow_color = color.name()
-            self.glow_color_btn.setStyleSheet(f"background: {self.glow_color}; border: 0px solid #bdbdbd;")
+            glow_border = '#444' if getattr(self, 'dark_theme_enabled', False) else '#bdbdbd'
+            self.glow_color_btn.setStyleSheet(f"background: {self.glow_color}; border: 1px solid {glow_border}; border-radius: 6px;")
 
     def choose_outline_color(self):
-        color = QColorDialog.getColor(QColor(self.outline_color), self)
+        color = themed_get_color(QColor(self.outline_color), self, getattr(self, 'dark_theme_enabled', False))
         if color.isValid():
             self.outline_color = color.name()
-            self.outline_color_btn.setStyleSheet(f"background: {self.outline_color}; border: 0px solid #bdbdbd;")
+            outline_border = '#444' if getattr(self, 'dark_theme_enabled', False) else '#bdbdbd'
+            self.outline_color_btn.setStyleSheet(f"background: {self.outline_color}; border: 1px solid {outline_border}; border-radius: 6px;")
 
     # apply_theme теперь берётся из LightThemeMixin/DarkThemeMixin
 
@@ -1040,14 +1469,63 @@ class SettingsDialog(QDialog, LightThemeMixin, DarkThemeMixin):
         return layout
 
     def apply_settings(self):
-        self.settingsApplied.emit(self.get_settings())
+        # Determine who called Apply
+        sender = None
+        try:
+            sender = self.sender()
+        except Exception:
+            sender = None
+        # If Apply pressed on Profiles tab -> apply currently selected profile to the app
+        if sender is not None and hasattr(self, 'apply_profiles_btn') and sender == self.apply_profiles_btn:
+            name = self.profiles_combo.currentText() if hasattr(self, 'profiles_combo') else None
+            if not name:
+                return
+            profiles = getattr(self, '_profiles', {})
+            settings = profiles.get(name)
+            if not settings:
+                return
+            # Emit the saved settings tuple directly
+            try:
+                self.settingsApplied.emit(settings)
+                # persist selected profile choice
+                if hasattr(self.parent(), 'save_settings'):
+                    try:
+                        self.parent().selected_profile = name
+                        self.parent()._profiles = self._profiles
+                        self.parent().save_settings()
+                    except Exception:
+                        pass
+            except Exception:
+                logger.exception('Failed to apply profile')
+            return
+
+        # Default: Apply current UI settings to app and save into selected profile if any
+        try:
+            settings = self.get_settings()
+            self.settingsApplied.emit(settings)
+            name = getattr(self, 'selected_profile', None)
+            if not name and hasattr(self, 'profiles_combo'):
+                name = self.profiles_combo.currentText()
+            if name:
+                profiles = getattr(self, '_profiles', {})
+                profiles[name] = settings
+                self._profiles = profiles
+                if hasattr(self.parent(), 'save_settings'):
+                    try:
+                        self.parent()._profiles = self._profiles
+                        self.parent().selected_profile = name
+                        self.parent().save_settings()
+                    except Exception:
+                        pass
+        except Exception:
+            logger.exception('Apply settings failed')
 
     def update_language(self, translations, lang_code):
         self.translations = translations
         self.current_language = lang_code
         self.tr = lambda key: self.translations.get(self.current_language, {}).get(key, key)
-        # Обновить названия вкладок
-        self.tabs = [self.tr("line"), self.tr("effects"), self.tr("settings_tab")]
+        # Обновить названия вкладок (insert profiles before settings)
+        self.tabs = [self.tr("line"), self.tr("effects"), self.tr("profiles"), self.tr("settings_tab")]
         for i, btn in enumerate(self.tab_buttons):
             btn.setText(self.tabs[i])
             btn.setStyleSheet(self._tab_btn_style(selected=(i == self.stacked.currentIndex())))
@@ -1079,13 +1557,36 @@ class SettingsDialog(QDialog, LightThemeMixin, DarkThemeMixin):
         sakura_label = sakura_widget.layout().itemAt(0).widget()
         sakura_label.setText(self.tr("sakura_trail"))
         sakura_label.setFixedWidth(220)
+        # Вкладка Профили
+        try:
+            profiles_widget = self.stacked.widget(2)
+            # Header label is the first item in the top row layout
+            top_row = profiles_widget.layout().itemAt(0).layout()
+            header_label = top_row.itemAt(0).widget()
+            header_label.setText(self.tr("profiles"))
+            header_label.setFixedWidth(220)
+            # Update combo placeholder text if empty
+            try:
+                if self.profiles_combo.count() == 0:
+                    self.profiles_combo.addItem(self.tr("(no_profiles)"))
+            except Exception:
+                pass
+            # Buttons
+            if hasattr(self, 'save_profile_btn'):
+                self.save_profile_btn.setText(self.tr("save_profile"))
+            if hasattr(self, 'delete_profile_btn'):
+                self.delete_profile_btn.setText(self.tr("delete_profile"))
+            if hasattr(self, 'apply_profiles_btn'):
+                self.apply_profiles_btn.setText(self.tr("apply"))
+        except Exception:
+            pass
         pixel_widget = effects_layout.itemAt(2).widget()
         pixel_label = pixel_widget.layout().itemAt(0).widget()
         pixel_label.setText(self.tr("pixel_trail"))
         pixel_label.setFixedWidth(220)
         self.apply_btn2.setText(self.tr("apply"))
         # Вкладка 3
-        settings_layout = self.stacked.widget(2).layout()
+        settings_layout = self.stacked.widget(3).layout()
         lang_label = settings_layout.itemAt(0).layout().itemAt(0).widget()
         lang_label.setText(self.tr("language"))
         lang_label.setFixedWidth(220)
@@ -1173,11 +1674,11 @@ class CursorTrailWidget(QWidget):
         self.current_language = "ru"
         self.load_settings()
         self.setWindowFlags(
-            Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool | Qt.WindowTransparentForInput
+            Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool | Qt.WindowType.WindowTransparentForInput
         )
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setAttribute(Qt.WA_TransparentForMouseEvents)
-        self.setWindowState(Qt.WindowFullScreen)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.setWindowState(Qt.WindowState.WindowFullScreen)
 
         self.trail = deque(maxlen=self.trail_length)
         self.timer = QTimer(self)
@@ -1186,7 +1687,7 @@ class CursorTrailWidget(QWidget):
 
         # --- ТРЕЙ МЕНЮ С ПЕРЕВОДОМ ---
         style = QApplication.style()
-        icon = style.standardIcon(QStyle.SP_ComputerIcon)
+        icon = style.standardIcon(QStyle.StandardPixmap.SP_ComputerIcon)
         if hasattr(sys, '_MEIPASS'):
             icon_path = os.path.join(sys._MEIPASS, 'icon.ico')
         else:
@@ -1222,6 +1723,20 @@ class CursorTrailWidget(QWidget):
         self.sakura_timer.timeout.connect(self.update_sakura)
         self.sakura_timer.start(16)
 
+    def open_themed_color_dialog(self, initial_color: QColor, parent=None):
+        """Open QColorDialog themed according to current app theme and return QColor."""
+        dlg_parent = parent if parent is not None else self
+        dlg = QColorDialog(dlg_parent)
+        dlg.setCurrentColor(initial_color if isinstance(initial_color, QColor) else QColor(initial_color))
+        # Apply minimal themed stylesheet so dialog matches app theme
+        if getattr(self, 'dark_theme_enabled', False):
+            dlg.setStyleSheet("QWidget { background: #2b2b2b; color: #fff; } QButton { background: #3a3a3a; color: #fff; }")
+        else:
+            dlg.setStyleSheet("QWidget { background: #f5f5f5; color: #232323; } QButton { background: #ffffff; color: #232323; }")
+        if dlg.exec():
+            return dlg.selectedColor()
+        return QColor()
+
     def load_translations(self):
         try:
             # Исправлено: используем sys._MEIPASS для PyInstaller
@@ -1232,7 +1747,7 @@ class CursorTrailWidget(QWidget):
             with open(translations_path, 'r', encoding='utf-8') as f:
                 self.translations = json.load(f)
         except Exception as e:
-            print("Ошибка загрузки переводов:", e)
+            logger.exception('Failed to load translations from %s', translations_path)
             self.translations = {"ru": {}, "en": {}, "zh": {}, "ja": {}}
 
     def tr(self, key):
@@ -1303,8 +1818,31 @@ class CursorTrailWidget(QWidget):
                 self.pixel_trail_enabled = data.get('pixel_trail_enabled', False)
                 self.current_language = data.get('language', 'ru')
                 self.dark_theme_enabled = data.get('dark_theme_enabled', False)  # добавлено
-            except Exception as e:
-                print("Ошибка загрузки настроек:", e)
+                # load profiles dict if present
+                self._profiles = data.get('profiles', {})
+                # last selected profile (profiles are autosaved by default)
+                self.selected_profile = data.get('selected_profile', None)
+                # If no profiles exist, create a default 'Стандартный' profile and persist
+                try:
+                    if not self._profiles:
+                        default_name = "Стандартный" if self.current_language == 'ru' else self.tr('profiles')
+                        self._profiles = {default_name: [
+                            self.trail_length, self.trail_width, self.gradient_colors,
+                            self.fade_enabled, self.alpha, self.glow_enabled, self.glow_color,
+                            self.outline_enabled, self.outline_color, self.rgb_trail_enabled,
+                            self.sakura_trail_enabled, self.current_language, self.pixel_trail_enabled,
+                            self.dark_theme_enabled
+                        ]}
+                        self.selected_profile = default_name
+                        # persist default profile into settings.json
+                        try:
+                            self.save_settings()
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+            except Exception:
+                logger.exception('Failed to load settings from %s', settings_path)
                 self.set_default_settings()
         else:
             self.set_default_settings()
@@ -1315,17 +1853,17 @@ class CursorTrailWidget(QWidget):
             if hasattr(self, 'timer') and self.timer is not None:
                 self.timer.stop()
         except Exception:
-            pass
+            logger.exception('Error stopping main timer')
         try:
             if hasattr(self, 'rgb_timer') and self.rgb_timer is not None:
                 self.rgb_timer.stop()
         except Exception:
-            pass
+            logger.exception('Error stopping rgb timer')
         try:
             if hasattr(self, 'sakura_timer') and self.sakura_timer is not None:
                 self.sakura_timer.stop()
         except Exception:
-            pass
+            logger.exception('Error stopping sakura timer')
         # Очистить буферы
         if hasattr(self, 'trail'):
             self.trail.clear()
@@ -1386,8 +1924,8 @@ class CursorTrailWidget(QWidget):
                 if hasattr(root, 'setPixelEnabled'):
                     root.setPixelEnabled(bool(self.pixel_trail_enabled))
                 # тест-спавн убран — лепестки будут спавниться при движении курсора
-        except Exception as e:
-            print('attach_qml_overlay error:', e)
+        except Exception:
+            logger.exception('attach_qml_overlay error')
 
     def set_default_settings(self):
         self.trail_length = 30
@@ -1423,11 +1961,19 @@ class CursorTrailWidget(QWidget):
             'language': self.current_language,
             'dark_theme_enabled': self.dark_theme_enabled  # добавлено
         }
+        # include profiles if present
+        if hasattr(self, '_profiles'):
+            data['profiles'] = self._profiles
+        # include selected profile (profiles are autosaved by default)
+        try:
+            data['selected_profile'] = getattr(self, 'selected_profile', None)
+        except Exception:
+            data['selected_profile'] = None
         try:
             with open(settings_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print("Ошибка сохранения настроек:", e)
+        except Exception:
+            logger.exception('Failed to save settings to %s', settings_path)
 
     def update_tray_menu(self):
         self.tray_menu.clear()
@@ -1442,6 +1988,16 @@ class CursorTrailWidget(QWidget):
         autostart_action.triggered.connect(self.toggle_autostart)
 
     def open_settings(self):
+        # If a settings dialog is already open, raise and activate it instead of creating a new one
+        existing = getattr(self, '_settings_dialog', None)
+        if existing is not None and existing.isVisible():
+            try:
+                existing.raise_()
+                existing.activateWindow()
+            except Exception:
+                pass
+            return
+
         dlg = SettingsDialog(
             self,
             self.trail_length,
@@ -1459,6 +2015,19 @@ class CursorTrailWidget(QWidget):
             getattr(self, "pixel_trail_enabled", False),
             getattr(self, "dark_theme_enabled", False)  # передаем новое значение
         )
+
+        # keep reference so subsequent calls reuse same dialog
+        self._settings_dialog = dlg
+
+        def _clear_settings_dialog():
+            if getattr(self, '_settings_dialog', None) is dlg:
+                self._settings_dialog = None
+
+        try:
+            dlg.finished.connect(lambda _=None: _clear_settings_dialog())
+        except Exception:
+            pass
+
         def apply_from_dialog(settings):
             (
                 new_trail_length, new_trail_width, new_gradient_colors,
@@ -1485,7 +2054,7 @@ class CursorTrailWidget(QWidget):
             self.dark_theme_enabled = new_dark_theme_enabled
             old_trail = list(self.trail)
             self.trail = deque(old_trail, maxlen=self.trail_length)
-            self.save_settings()            
+            self.save_settings()
             self.update_tray_menu()
             self.update()
             # Если QML оверлей подключён — синхронизируем параметры
@@ -1528,10 +2097,17 @@ class CursorTrailWidget(QWidget):
             except Exception as e:
                 print('apply_from_dialog overlay sync error:', e)
             if language_changed:
-                dlg.update_language(self.translations, self.current_language)
+                try:
+                    dlg.update_language(self.translations, self.current_language)
+                except Exception:
+                    pass
             # Тёмная тема применяется только к окну настроек, поэтому вызов apply_theme здесь не нужен
+
         dlg.settingsApplied.connect(apply_from_dialog)
-        dlg.exec_()
+        try:
+            dlg.exec()
+        finally:
+            _clear_settings_dialog()
 
     def update_language(self):
         # Обновить меню трея и перерисовать окно
@@ -1551,7 +2127,7 @@ class CursorTrailWidget(QWidget):
         # --- Sakura трейл ---
         if self.sakura_trail_enabled:
             painter = QPainter(self)
-            painter.setRenderHint(QPainter.Antialiasing, True)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
             for petal in self.sakura_petals:
                 petal.draw(painter)
             return
@@ -1561,7 +2137,7 @@ class CursorTrailWidget(QWidget):
             if len(self.trail) < 2:
                 return
             painter = QPainter(self)
-            painter.setRenderHint(QPainter.Antialiasing, False)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
             n = len(self.trail)
             min_size = max(2, int(self.trail_width * 0.7))
             max_size = max(3, int(self.trail_width * 1.5))
@@ -1603,7 +2179,7 @@ class CursorTrailWidget(QWidget):
                     glow_color.setAlpha(int(seg_alpha * 0.25))
                     for factor in [2.5, 1.5]:
                         s = int(size * factor)
-                        painter.setPen(Qt.NoPen)
+                        painter.setPen(Qt.PenStyle.NoPen)
                         painter.setBrush(glow_color)
                         painter.drawRect(pos.x() - s//2, pos.y() - s//2, s, s)
                 # Outline
@@ -1611,11 +2187,11 @@ class CursorTrailWidget(QWidget):
                     outline_color = QColor(self.outline_color)
                     outline_color.setAlpha(seg_alpha)
                     s = size + 4
-                    painter.setPen(Qt.NoPen)
+                    painter.setPen(Qt.PenStyle.NoPen)
                     painter.setBrush(outline_color)
                     painter.drawRect(pos.x() - s//2, pos.y() - s//2, s, s)
                 # Основной пиксель
-                painter.setPen(Qt.NoPen)
+                painter.setPen(Qt.PenStyle.NoPen)
                 painter.setBrush(c)
                 painter.drawRect(pos.x() - size//2, pos.y() - size//2, size, size)
             return
@@ -1624,7 +2200,7 @@ class CursorTrailWidget(QWidget):
         if len(self.trail) < 2:
             return
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         n = len(self.trail)
         path = QPainterPath()
         path.moveTo(self.trail[0])
@@ -1645,7 +2221,7 @@ class CursorTrailWidget(QWidget):
                     width = (self.trail_width + 4) * (1-t) + 2
                     outline_color = QColor(self.outline_color)
                     outline_color.setAlpha(self.alpha)
-                    pen = QPen(outline_color, width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+                    pen = QPen(outline_color, width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
                     painter.setPen(pen)
                     painter.drawLine(self.trail[i], self.trail[i+1])
             # --- Glow (свечение) для RGB трейла ---
@@ -1658,7 +2234,7 @@ class CursorTrailWidget(QWidget):
                     for glow_pass, factor in enumerate([4.0, 2.5, 1.5]):
                         glow_c = QColor(r, g, b)
                         glow_c.setAlpha(int(self.alpha * (0.12 if glow_pass==0 else 0.18 if glow_pass==1 else 0.25)))
-                        pen = QPen(glow_c, width * factor, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+                        pen = QPen(glow_c, width * factor, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
                         painter.setPen(pen)
                         painter.drawLine(self.trail[i], self.trail[i+1])
             # --- Основная линия ---
@@ -1673,7 +2249,7 @@ class CursorTrailWidget(QWidget):
                     seg_alpha = self.alpha
                 c.setAlpha(seg_alpha)
                 width = self.trail_width * (1-t) + 2
-                pen = QPen(c, width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+                pen = QPen(c, width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
                 painter.setPen(pen)
                 painter.drawLine(self.trail[i], self.trail[i+1])
             return  # Не рисуем обычный градиент
@@ -1688,7 +2264,7 @@ class CursorTrailWidget(QWidget):
                 for i in range(n-1):
                     t = i / (n-1)
                     width = self.trail_width * factor * (1-t) + 2
-                    pen = QPen(glow_color, width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+                    pen = QPen(glow_color, width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
                     painter.setPen(pen)
                     painter.drawLine(self.trail[i], self.trail[i+1])
         # --- Outline ---
@@ -1698,7 +2274,7 @@ class CursorTrailWidget(QWidget):
             for i in range(n-1):
                 t = i / (n-1)
                 width = (self.trail_width + 4) * (1-t) + 2
-                pen = QPen(outline_color, width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+                pen = QPen(outline_color, width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
                 painter.setPen(pen)
                 painter.drawLine(self.trail[i], self.trail[i+1])
         # --- Основная линия с острым концом и градиентом по всем цветам ---
@@ -1722,7 +2298,7 @@ class CursorTrailWidget(QWidget):
                 seg_alpha = self.alpha
             c.setAlpha(seg_alpha)
             width = self.trail_width * (1-t) + 2
-            pen = QPen(c, width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+            pen = QPen(c, width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
             painter.setPen(pen)
             painter.drawLine(self.trail[i], self.trail[i+1])
 
@@ -1795,13 +2371,13 @@ if __name__ == "__main__":
     class QmlTrailOverlay(QQuickWidget):
         def __init__(self, qml_path, parent=None):
             super().__init__(parent)
-            self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-            self.setAttribute(Qt.WA_TranslucentBackground, True)
-            self.setClearColor(Qt.transparent)
-            self.setResizeMode(QQuickWidget.SizeRootObjectToView)
+            self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+            self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+            self.setClearColor(Qt.GlobalColor.transparent)
+            self.setResizeMode(QQuickWidget.ResizeMode.SizeRootObjectToView)
             self.setSource(QUrl.fromLocalFile(os.path.abspath(qml_path)))
             # Показываем поверх всех окон, но без рамки
-            self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
+            self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool)
 
         def push_point(self, x, y):
             root = self.rootObject()
@@ -1814,23 +2390,37 @@ if __name__ == "__main__":
                 root.setTrailColor(color)
 
     qml_path = os.path.join(os.path.dirname(__file__), 'trail.qml')
-    overlay = QmlTrailOverlay(qml_path)
-    overlay.setGeometry(0, 0, w.width(), w.height())
-    overlay.setFocusPolicy(Qt.NoFocus)
-    overlay.setAttribute(Qt.WA_ShowWithoutActivating, True)
-    overlay.show()
+    if not os.path.exists(qml_path):
+        logger.error('QML file not found: %s', qml_path)
+        overlay = None
+    else:
+        try:
+            overlay = QmlTrailOverlay(qml_path)
+        except Exception:
+            logger.exception('Failed to create QmlTrailOverlay for %s', qml_path)
+            overlay = None
+    if overlay is not None:
+        overlay.setGeometry(0, 0, w.width(), w.height())
+        overlay.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        overlay.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
+        overlay.show()
 
     # Отключаем старую рендер-логику и привязываем QML оверлей
     try:
         w.disable_legacy_renderer()
-        w.attach_qml_overlay(overlay)
-    except Exception as e:
-        print('overlay attach error:', e)
+        if overlay is not None:
+            w.attach_qml_overlay(overlay)
+        else:
+            logger.warning('Overlay not created; falling back to legacy renderer')
+    except Exception:
+        logger.exception('overlay attach error')
 
     # Обновление позиции курсора и передача в QML
     def update_overlay():
         pos = QCursor.pos()
         try:
+            if overlay is None:
+                raise RuntimeError("overlay not available")
             local = overlay.mapFromGlobal(pos)
             overlay.push_point(local.x(), local.y())
             # Спавним лепесток в QML, если включена сакура
@@ -1841,16 +2431,17 @@ if __name__ == "__main__":
                         # розовый цвет для лепестков
                         root.spawnPetal(local.x(), local.y(), float(w.trail_width) * 2.0, '#ffb3b3')
             except Exception:
-                pass
+                logger.exception('Failed to spawn petal via QML (local coordinates)')
         except Exception:
-            overlay.push_point(pos.x(), pos.y())
             try:
-                root = overlay.rootObject()
-                if root is not None and getattr(w, 'sakura_trail_enabled', False):
-                    if hasattr(root, 'spawnPetal'):
-                        root.spawnPetal(pos.x(), pos.y(), float(w.trail_width) * 2.0, '#ffb3b3')
+                if overlay is not None:
+                    overlay.push_point(pos.x(), pos.y())
+                    root = overlay.rootObject()
+                    if root is not None and getattr(w, 'sakura_trail_enabled', False):
+                        if hasattr(root, 'spawnPetal'):
+                            root.spawnPetal(pos.x(), pos.y(), float(w.trail_width) * 2.0, '#ffb3b3')
             except Exception:
-                pass
+                logger.exception('Failed to push point or spawn petal via QML (global coordinates)')
 
     timer = QTimer()
     timer.timeout.connect(update_overlay)
@@ -1858,7 +2449,11 @@ if __name__ == "__main__":
 
     # Следим за изменением размера основного окна
     def on_main_resize(event=None):
-        overlay.setGeometry(0, 0, w.width(), w.height())
+        if overlay is not None:
+            try:
+                overlay.setGeometry(0, 0, w.width(), w.height())
+            except Exception:
+                logger.exception('Failed to resize overlay')
 
     # Подвешиваем обработчик размера
     old_resize = w.resizeEvent
@@ -1870,4 +2465,4 @@ if __name__ == "__main__":
         on_main_resize(event)
     w.resizeEvent = new_resize
 
-    sys.exit(app.exec_())
+    sys.exit(app.exec())

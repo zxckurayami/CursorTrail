@@ -1,19 +1,41 @@
 {
-  "trail_length": 28,
-  "trail_width": 15,
+  "trail_length": 24,
+  "trail_width": 16,
   "gradient_colors": [
     "#000000",
-    "#000000"
+    "#ffffff"
   ],
   "fade_enabled": false,
   "alpha": 255,
   "glow_enabled": false,
   "glow_color": "#ffffff",
-  "outline_enabled": true,
+  "outline_enabled": false,
   "outline_color": "#ffffff",
   "rgb_trail_enabled": false,
   "sakura_trail_enabled": false,
   "pixel_trail_enabled": false,
   "language": "ru",
-  "dark_theme_enabled": true
+  "dark_theme_enabled": true,
+  "profiles": {
+    "Стандартный": [
+      24,
+      16,
+      [
+        "#000000",
+        "#ffffff"
+      ],
+      false,
+      255,
+      false,
+      "#ffffff",
+      false,
+      "#ffffff",
+      false,
+      false,
+      "ru",
+      false,
+      true
+    ]
+  },
+  "selected_profile": "Стандартный"
 }
