@@ -45,7 +45,6 @@ https://github.com/zxckurayami/CursorTrail/releases
 
 - Python
 - PySide6 / Qt
-- Qt Quick / QML
 - PyInstaller
 
 ## Установка для разработки

@@ -4,10 +4,9 @@ from PySide6.QtWidgets import (
     QApplication, QWidget, QStackedWidget, QSlider, QColorDialog, QPushButton, QLabel, QVBoxLayout,
     QHBoxLayout, QDialog, QCheckBox, QFrame, QGridLayout, QSystemTrayIcon, QMenu, QStyle, QListWidget, QListWidgetItem, QAbstractItemView, QScrollArea, QComboBox, QSizePolicy, QInputDialog
 )
-from PySide6.QtCore import Qt, QTimer, QPoint, QRect, QPointF, QSize, QRectF, QUrl, QPropertyAnimation, QEasingCurve, Signal, Property, Slot
-from PySide6.QtGui import QPainter, QColor, QPen, QCursor, QIcon, QPainterPath, QFont, QSurfaceFormat, QLinearGradient, QPixmap
+from PySide6.QtCore import Qt, QTimer, QPoint, QRect, QPointF, QSize, QRectF, QPropertyAnimation, QEasingCurve, Signal, Property, Slot
+from PySide6.QtGui import QPainter, QColor, QPen, QCursor, QIcon, QFont, QLinearGradient, QPixmap
 from collections import deque
-from PySide6.QtQuickWidgets import QQuickWidget
 
 
 def themed_get_color(initial, parent=None, dark=False):
@@ -1681,9 +1680,12 @@ class CursorTrailWidget(QWidget):
         self.setWindowState(Qt.WindowState.WindowFullScreen)
 
         self.trail = deque(maxlen=self.trail_length)
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.updateTrail)
-        self.timer.start(16)  # ~60 FPS
+        self._last_cursor_pos = None
+        self._settle_frames_remaining = 0
+        self._sync_render_cache()
+        self.render_timer = QTimer(self)
+        self.render_timer.timeout.connect(self._render_tick)
+        self.render_timer.start(16)
 
         # --- ТРЕЙ МЕНЮ С ПЕРЕВОДОМ ---
         style = QApplication.style()
@@ -1712,16 +1714,8 @@ class CursorTrailWidget(QWidget):
         self.tray_icon.setContextMenu(self.tray_menu)
         self.tray_icon.show()
 
-        self.rgb_phase = 0.0  # Для анимации RGB трейла
-        self.rgb_timer = QTimer(self)
-        self.rgb_timer.timeout.connect(self.update_rgb_phase)
-        self.rgb_timer.start(30)  # ~33 FPS для плавности
-
-        self.sakura_trail_enabled = self.sakura_trail_enabled  # Используем значение из load_settings
+        self.rgb_phase = 0.0
         self.sakura_petals = []
-        self.sakura_timer = QTimer(self)
-        self.sakura_timer.timeout.connect(self.update_sakura)
-        self.sakura_timer.start(16)
 
     def open_themed_color_dialog(self, initial_color: QColor, parent=None):
         """Open QColorDialog themed according to current app theme and return QColor."""
@@ -1753,50 +1747,71 @@ class CursorTrailWidget(QWidget):
     def tr(self, key):
         return self.translations.get(self.current_language, {}).get(key, key)
 
-    def update_rgb_phase(self):
-        if getattr(self, "rgb_trail_enabled", False):
-            self.rgb_phase = (self.rgb_phase + 0.02) % 1.0
-            self.update()
+    def _sync_render_cache(self):
+        colors = self.gradient_colors if getattr(self, "gradient_colors", None) else ["#3399ff", "#ffffff"]
+        self._gradient_qcolors = [QColor(color) for color in colors]
+        self._gradient_segment_count = max(0, len(self._gradient_qcolors) - 1)
 
-    def update_sakura(self):
-        if self.sakura_trail_enabled:  # Используем напрямую без getattr
-            # Настройка "Длина следа" влияет на максимальное количество лепестков
-            max_petals = self.trail_length
-            
-            # Добавляем новые лепестки, если их меньше чем trail_length
-            overlay = getattr(self, '_qml_overlay', None)
-            if overlay is not None:
-                root = overlay.rootObject()
-                if root is not None and hasattr(root, 'spawnPetal'):
-                    # Спавним лепесток в QML
-                    if random.random() < 0.35:
-                        pos = QCursor.pos()
-                        color = self.gradient_colors[0] if self.gradient_colors else '#ffb3b3'
-                        try:
-                            local = overlay.mapFromGlobal(pos)
-                            root.spawnPetal(local.x(), local.y(), float(self.trail_width) * 2.0, color)
-                        except Exception:
-                            try:
-                                root.spawnPetal(pos.x(), pos.y(), float(self.trail_width) * 2.0, color)
-                            except Exception:
-                                pass
-            else:
-                if len(self.sakura_petals) < max_petals and random.random() < 0.35:
-                    pos = QCursor.pos()
-                    # Настройка "Толщина следа" влияет на размер лепестков
-                    self.sakura_petals.append(SakuraPetal(pos, self.trail_width * 2))
-            
-            # Обновляем и удаляем старые лепестки, оставляя не более max_petals
-            # если используем QML — обновление лепестков делается в QML таймере
-            if overlay is None:
+    def _rgb_color(self, t):
+        r, g, b = colorsys.hsv_to_rgb((self.rgb_phase + t) % 1.0, 1.0, 1.0)
+        return QColor(int(r * 255), int(g * 255), int(b * 255))
+
+    def _gradient_color(self, t):
+        colors = getattr(self, "_gradient_qcolors", None) or [QColor("#3399ff")]
+        num_segments = len(colors) - 1
+        if num_segments <= 0:
+            return QColor(colors[0])
+
+        seg = min(int(t * num_segments), num_segments - 1)
+        local_t = (t - seg / num_segments) * num_segments
+        c1 = colors[seg]
+        c2 = colors[seg + 1]
+        return QColor(
+            int(c1.red() + (c2.red() - c1.red()) * local_t),
+            int(c1.green() + (c2.green() - c1.green()) * local_t),
+            int(c1.blue() + (c2.blue() - c1.blue()) * local_t),
+        )
+
+    def _render_tick(self):
+        pos = QCursor.pos()
+        moved = self._last_cursor_pos is None or pos != self._last_cursor_pos
+        needs_repaint = False
+
+        if moved:
+            self.trail.appendleft(pos)
+            self._last_cursor_pos = QPoint(pos)
+            self._settle_frames_remaining = max(0, int(self.trail_length))
+            needs_repaint = True
+        elif self.trail and self._settle_frames_remaining > 0:
+            self.trail.appendleft(pos)
+            self._settle_frames_remaining -= 1
+            needs_repaint = True
+
+        if getattr(self, "rgb_trail_enabled", False) and len(self.trail) >= 2:
+            self.rgb_phase = (self.rgb_phase + 0.02) % 1.0
+            needs_repaint = True
+
+        if self.sakura_trail_enabled:
+            max_petals = max(0, int(self.trail_length))
+            if moved and len(self.sakura_petals) < max_petals and random.random() < 0.35:
+                self.sakura_petals.append(SakuraPetal(pos, self.trail_width * 2))
+            if self.sakura_petals:
                 for petal in self.sakura_petals:
                     petal.update()
                 self.sakura_petals = [p for p in self.sakura_petals if not p.is_dead()][:max_petals]
-                self.update()
-        else:
-            if self.sakura_petals:
-                self.sakura_petals.clear()
-                self.update()
+                needs_repaint = True
+        elif self.sakura_petals:
+            self.sakura_petals.clear()
+            needs_repaint = True
+
+        if needs_repaint:
+            self.update()
+
+    def update_rgb_phase(self):
+        self._render_tick()
+
+    def update_sakura(self):
+        self._render_tick()
 
     def load_settings(self):
         settings_path = get_settings_path()
@@ -1846,86 +1861,6 @@ class CursorTrailWidget(QWidget):
                 self.set_default_settings()
         else:
             self.set_default_settings()
-
-    def disable_legacy_renderer(self):
-        # Останавливаем таймеры и очищаем списки, используемые старым рендерером
-        try:
-            if hasattr(self, 'timer') and self.timer is not None:
-                self.timer.stop()
-        except Exception:
-            logger.exception('Error stopping main timer')
-        try:
-            if hasattr(self, 'rgb_timer') and self.rgb_timer is not None:
-                self.rgb_timer.stop()
-        except Exception:
-            logger.exception('Error stopping rgb timer')
-        try:
-            if hasattr(self, 'sakura_timer') and self.sakura_timer is not None:
-                self.sakura_timer.stop()
-        except Exception:
-            logger.exception('Error stopping sakura timer')
-        # Очистить буферы
-        if hasattr(self, 'trail'):
-            self.trail.clear()
-        if hasattr(self, 'sakura_petals'):
-            self.sakura_petals.clear()
-        # Устанавливаем флаг, чтобы paintEvent игнорировал старую отрисовку
-        self._use_qml_trail = True
-
-    def attach_qml_overlay(self, overlay):
-        # Сохраняем ссылку на overlay и синхронизируем начальные настройки
-        self._qml_overlay = overlay
-        # счётчик попыток привязки (чтобы дождаться загрузки QML)
-        if not hasattr(self, '_overlay_attach_attempts'):
-            self._overlay_attach_attempts = {}
-        self._overlay_attach_attempts[id(overlay)] = self._overlay_attach_attempts.get(id(overlay), 0) + 1
-        attempt = self._overlay_attach_attempts.get(id(overlay), 1)
-        if attempt > 12:
-            # если слишком много попыток — отдаемся
-            print('attach_qml_overlay: QML root not available after retries')
-            return
-        try:
-            # maxPoints <- trail_length
-            root = overlay.rootObject()
-            if root is None:
-                # QML ещё не загрузился — попробуем позже
-                QTimer.singleShot(120, lambda: self.attach_qml_overlay(overlay))
-                return
-            if root is not None:
-                if hasattr(root, 'setMaxPoints'):
-                    root.setMaxPoints(int(self.trail_length))
-                if hasattr(root, 'setBaseSize'):
-                    root.setBaseSize(float(self.trail_width))
-                # Вычислим базовый цвет: если RGB включён — используем first gradient color
-                color = self.gradient_colors[0] if self.gradient_colors else '#ff5555'
-                if hasattr(root, 'setTrailColor'):
-                    root.setTrailColor(color)
-                # Alpha: normalize 0..1
-                a = max(0, min(1.0, (self.alpha or 255) / 255.0))
-                if hasattr(root, 'setAlpha'):
-                    root.setAlpha(a)
-                # Gradient array
-                if hasattr(root, 'setGradientColors'):
-                    root.setGradientColors(self.gradient_colors)
-                if hasattr(root, 'setFadeEnabled'):
-                    root.setFadeEnabled(bool(self.fade_enabled))
-                if hasattr(root, 'setRgbEnabled'):
-                    root.setRgbEnabled(bool(self.rgb_trail_enabled))
-                if hasattr(root, 'setGlowEnabled'):
-                    root.setGlowEnabled(bool(self.glow_enabled))
-                if hasattr(root, 'setGlowColor'):
-                    root.setGlowColor(self.glow_color)
-                if hasattr(root, 'setOutlineEnabled'):
-                    root.setOutlineEnabled(bool(self.outline_enabled))
-                if hasattr(root, 'setOutlineColor'):
-                    root.setOutlineColor(self.outline_color)
-                if hasattr(root, 'setSakuraEnabled'):
-                    root.setSakuraEnabled(bool(self.sakura_trail_enabled))
-                if hasattr(root, 'setPixelEnabled'):
-                    root.setPixelEnabled(bool(self.pixel_trail_enabled))
-                # тест-спавн убран — лепестки будут спавниться при движении курсора
-        except Exception:
-            logger.exception('attach_qml_overlay error')
 
     def set_default_settings(self):
         self.trail_length = 30
@@ -2054,48 +1989,14 @@ class CursorTrailWidget(QWidget):
             self.dark_theme_enabled = new_dark_theme_enabled
             old_trail = list(self.trail)
             self.trail = deque(old_trail, maxlen=self.trail_length)
+            self._settle_frames_remaining = min(
+                getattr(self, "_settle_frames_remaining", 0),
+                int(self.trail_length)
+            )
+            self._sync_render_cache()
             self.save_settings()
             self.update_tray_menu()
             self.update()
-            # Если QML оверлей подключён — синхронизируем параметры
-            try:
-                overlay = getattr(self, '_qml_overlay', None)
-                if overlay is not None:
-                    root = overlay.rootObject()
-                    if root is not None:
-                        if hasattr(root, 'setMaxPoints'):
-                            root.setMaxPoints(int(self.trail_length))
-                        if hasattr(root, 'setBaseSize'):
-                            root.setBaseSize(float(self.trail_width))
-                        color = self.gradient_colors[0] if self.gradient_colors else '#ff5555'
-                        if hasattr(root, 'setTrailColor'):
-                            root.setTrailColor(color)
-                        a = max(0, min(1.0, (self.alpha or 255) / 255.0))
-                        if hasattr(root, 'setAlpha'):
-                            root.setAlpha(a)
-                        # дополнительные эффекты
-                        if hasattr(root, 'setGradientColors'):
-                            root.setGradientColors(self.gradient_colors)
-                        if hasattr(root, 'setFadeEnabled'):
-                            root.setFadeEnabled(bool(self.fade_enabled))
-                        if hasattr(root, 'setRgbEnabled'):
-                            root.setRgbEnabled(bool(self.rgb_trail_enabled))
-                        if hasattr(root, 'setGlowEnabled'):
-                            root.setGlowEnabled(bool(self.glow_enabled))
-                        if hasattr(root, 'setGlowColor'):
-                            root.setGlowColor(self.glow_color)
-                        if hasattr(root, 'setOutlineEnabled'):
-                            root.setOutlineEnabled(bool(self.outline_enabled))
-                        if hasattr(root, 'setOutlineColor'):
-                            root.setOutlineColor(self.outline_color)
-                        if hasattr(root, 'setSakuraEnabled'):
-                            root.setSakuraEnabled(bool(self.sakura_trail_enabled))
-                        if hasattr(root, 'setPixelEnabled'):
-                            root.setPixelEnabled(bool(self.pixel_trail_enabled))
-                        if hasattr(root, 'clearPoints'):
-                            root.clearPoints()
-            except Exception as e:
-                print('apply_from_dialog overlay sync error:', e)
             if language_changed:
                 try:
                     dlg.update_language(self.translations, self.current_language)
@@ -2116,16 +2017,15 @@ class CursorTrailWidget(QWidget):
         # Можно добавить дополнительные действия, если появятся другие надписи вне меню
 
     def updateTrail(self):
-        pos = QCursor.pos()
-        self.trail.appendleft(pos)
-        self.update()
+        self._render_tick()
 
     def paintEvent(self, event):
-        # Если включён QML оверлей — не рисуем старый трейл
-        if getattr(self, '_use_qml_trail', False):
-            return
+        points = list(self.trail)
+
         # --- Sakura трейл ---
         if self.sakura_trail_enabled:
+            if not self.sakura_petals:
+                return
             painter = QPainter(self)
             painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
             for petal in self.sakura_petals:
@@ -2134,45 +2034,24 @@ class CursorTrailWidget(QWidget):
 
         # --- Pixel трейл ---
         if getattr(self, "pixel_trail_enabled", False):
-            if len(self.trail) < 2:
+            if len(points) < 2:
                 return
             painter = QPainter(self)
             painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
-            n = len(self.trail)
+            n = len(points)
             min_size = max(2, int(self.trail_width * 0.7))
             max_size = max(3, int(self.trail_width * 1.5))
-            colors = [QColor(c) for c in self.gradient_colors]
-            num_segments = len(colors) - 1
-            for i in range(n):
-                t = i / (n-1)
-                # Цвет (обычный градиент или RGB)
-                if getattr(self, "rgb_trail_enabled", False):
-                    def hsv_to_rgb(h, s, v):
-                        import colorsys
-                        r, g, b = colorsys.hsv_to_rgb(h, s, v)
-                        return int(r*255), int(g*255), int(b*255)
-                    phase = (self.rgb_phase + t) % 1.0
-                    r, g, b = hsv_to_rgb(phase, 1, 1)
-                    c = QColor(r, g, b)
-                else:
-                    if num_segments == 0:
-                        c = colors[0]
-                    else:
-                        seg = min(int(t * num_segments), num_segments - 1)
-                        local_t = (t - seg / num_segments) * num_segments
-                        c1 = colors[seg]
-                        c2 = colors[seg+1]
-                        r = int(c1.red() + (c2.red() - c1.red()) * local_t)
-                        g = int(c1.green() + (c2.green() - c1.green()) * local_t)
-                        b = int(c1.blue() + (c2.blue() - c1.blue()) * local_t)
-                        c = QColor(r, g, b)
+            use_rgb = getattr(self, "rgb_trail_enabled", False)
+            denominator = max(1, n - 1)
+            for i, pos in enumerate(points):
+                t = i / denominator
+                c = self._rgb_color(t) if use_rgb else self._gradient_color(t)
                 if self.fade_enabled:
                     seg_alpha = int(self.alpha * (1 - t) ** 1.5)
                 else:
                     seg_alpha = self.alpha
                 c.setAlpha(seg_alpha)
                 size = int(max_size * (1-t) + min_size)
-                pos = self.trail[i]
                 # Glow (свечение)
                 if self.glow_enabled:
                     glow_color = QColor(self.glow_color)
@@ -2197,52 +2076,41 @@ class CursorTrailWidget(QWidget):
             return
 
         # ...обычный трейл...
-        if len(self.trail) < 2:
+        if len(points) < 2:
             return
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        n = len(self.trail)
-        path = QPainterPath()
-        path.moveTo(self.trail[0])
-        for pt in list(self.trail)[1:]:
-            path.lineTo(pt)
+        n = len(points)
+        denominator = max(1, n - 1)
         # --- Градиент по всем цветам или RGB трейл ---
         use_rgb = getattr(self, "rgb_trail_enabled", False)
         if use_rgb:
-            # Генерируем динамический радужный градиент
-            def hsv_to_rgb(h, s, v):
-                import colorsys
-                r, g, b = colorsys.hsv_to_rgb(h, s, v)
-                return int(r*255), int(g*255), int(b*255)
             # --- Outline (под трейлом) ---
             if self.outline_enabled:
                 for i in range(n-1):
-                    t = i / (n-1)
+                    t = i / denominator
                     width = (self.trail_width + 4) * (1-t) + 2
                     outline_color = QColor(self.outline_color)
                     outline_color.setAlpha(self.alpha)
                     pen = QPen(outline_color, width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
                     painter.setPen(pen)
-                    painter.drawLine(self.trail[i], self.trail[i+1])
+                    painter.drawLine(points[i], points[i+1])
             # --- Glow (свечение) для RGB трейла ---
             for i in range(n-1):
-                t = i / (n-1)
-                phase = (self.rgb_phase + t) % 1.0
-                r, g, b = hsv_to_rgb(phase, 1, 1)
+                t = i / denominator
+                base_color = self._rgb_color(t)
                 width = self.trail_width * (1-t) + 2
                 if self.glow_enabled:
                     for glow_pass, factor in enumerate([4.0, 2.5, 1.5]):
-                        glow_c = QColor(r, g, b)
+                        glow_c = QColor(base_color)
                         glow_c.setAlpha(int(self.alpha * (0.12 if glow_pass==0 else 0.18 if glow_pass==1 else 0.25)))
                         pen = QPen(glow_c, width * factor, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
                         painter.setPen(pen)
-                        painter.drawLine(self.trail[i], self.trail[i+1])
+                        painter.drawLine(points[i], points[i+1])
             # --- Основная линия ---
             for i in range(n-1):
-                t = i / (n-1)
-                phase = (self.rgb_phase + t) % 1.0
-                r, g, b = hsv_to_rgb(phase, 1, 1)
-                c = QColor(r, g, b)
+                t = i / denominator
+                c = self._rgb_color(t)
                 if self.fade_enabled:
                     seg_alpha = int(self.alpha * (1 - t) ** 1.5)
                 else:
@@ -2251,47 +2119,34 @@ class CursorTrailWidget(QWidget):
                 width = self.trail_width * (1-t) + 2
                 pen = QPen(c, width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
                 painter.setPen(pen)
-                painter.drawLine(self.trail[i], self.trail[i+1])
+                painter.drawLine(points[i], points[i+1])
             return  # Не рисуем обычный градиент
-        # --- Градиент по всем цветам ---
-        colors = [QColor(c) for c in self.gradient_colors]
-        num_segments = len(colors) - 1
+
         # --- Glow (свечение) ---
         if self.glow_enabled:
             for glow_pass, factor in enumerate([4.0, 2.5, 1.5]):
                 glow_color = QColor(self.glow_color)
                 glow_color.setAlpha(int(self.alpha * (0.12 if glow_pass==0 else 0.18 if glow_pass==1 else 0.25)))
                 for i in range(n-1):
-                    t = i / (n-1)
+                    t = i / denominator
                     width = self.trail_width * factor * (1-t) + 2
                     pen = QPen(glow_color, width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
                     painter.setPen(pen)
-                    painter.drawLine(self.trail[i], self.trail[i+1])
+                    painter.drawLine(points[i], points[i+1])
         # --- Outline ---
         if self.outline_enabled:
             outline_color = QColor(self.outline_color)
             outline_color.setAlpha(self.alpha)
             for i in range(n-1):
-                t = i / (n-1)
+                t = i / denominator
                 width = (self.trail_width + 4) * (1-t) + 2
                 pen = QPen(outline_color, width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
                 painter.setPen(pen)
-                painter.drawLine(self.trail[i], self.trail[i+1])
+                painter.drawLine(points[i], points[i+1])
         # --- Основная линия с острым концом и градиентом по всем цветам ---
         for i in range(n-1):
-            t = i / (n-1)
-            # Определяем, между какими цветами интерполировать
-            if num_segments == 0:
-                c = colors[0]
-            else:
-                seg = min(int(t * num_segments), num_segments - 1)
-                local_t = (t - seg / num_segments) * num_segments
-                c1 = colors[seg]
-                c2 = colors[seg+1]
-                r = int(c1.red() + (c2.red() - c1.red()) * local_t)
-                g = int(c1.green() + (c2.green() - c1.green()) * local_t)
-                b = int(c1.blue() + (c2.blue() - c1.blue()) * local_t)
-                c = QColor(r, g, b)
+            t = i / denominator
+            c = self._gradient_color(t)
             if self.fade_enabled:
                 seg_alpha = int(self.alpha * (1 - t) ** 1.5)
             else:
@@ -2300,7 +2155,7 @@ class CursorTrailWidget(QWidget):
             width = self.trail_width * (1-t) + 2
             pen = QPen(c, width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
             painter.setPen(pen)
-            painter.drawLine(self.trail[i], self.trail[i+1])
+            painter.drawLine(points[i], points[i+1])
 
     def set_fade_enabled(self, enabled: bool):
         """Включает или отключает плавное затухание трейла на конце."""
@@ -2357,112 +2212,6 @@ class CursorTrailWidget(QWidget):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-
-    # Улучшение формата рендеринга для QQuickWidget (GPU)
-    fmt = QSurfaceFormat()
-    fmt.setSamples(4)
-    QSurfaceFormat.setDefaultFormat(fmt)
-
-    # Основной виджет приложения
     w = CursorTrailWidget()
     w.show()
-
-    # QML оверлей с трейлом: transparent, не перехватывает мышь
-    class QmlTrailOverlay(QQuickWidget):
-        def __init__(self, qml_path, parent=None):
-            super().__init__(parent)
-            self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-            self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-            self.setClearColor(Qt.GlobalColor.transparent)
-            self.setResizeMode(QQuickWidget.ResizeMode.SizeRootObjectToView)
-            self.setSource(QUrl.fromLocalFile(os.path.abspath(qml_path)))
-            # Показываем поверх всех окон, но без рамки
-            self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool)
-
-        def push_point(self, x, y):
-            root = self.rootObject()
-            if root is not None and hasattr(root, 'pushPoint'):
-                root.pushPoint(x, y)
-
-        def set_trail_color(self, color):
-            root = self.rootObject()
-            if root is not None and hasattr(root, 'setTrailColor'):
-                root.setTrailColor(color)
-
-    qml_path = os.path.join(os.path.dirname(__file__), 'trail.qml')
-    if not os.path.exists(qml_path):
-        logger.error('QML file not found: %s', qml_path)
-        overlay = None
-    else:
-        try:
-            overlay = QmlTrailOverlay(qml_path)
-        except Exception:
-            logger.exception('Failed to create QmlTrailOverlay for %s', qml_path)
-            overlay = None
-    if overlay is not None:
-        overlay.setGeometry(0, 0, w.width(), w.height())
-        overlay.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        overlay.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
-        overlay.show()
-
-    # Отключаем старую рендер-логику и привязываем QML оверлей
-    try:
-        w.disable_legacy_renderer()
-        if overlay is not None:
-            w.attach_qml_overlay(overlay)
-        else:
-            logger.warning('Overlay not created; falling back to legacy renderer')
-    except Exception:
-        logger.exception('overlay attach error')
-
-    # Обновление позиции курсора и передача в QML
-    def update_overlay():
-        pos = QCursor.pos()
-        try:
-            if overlay is None:
-                raise RuntimeError("overlay not available")
-            local = overlay.mapFromGlobal(pos)
-            overlay.push_point(local.x(), local.y())
-            # Спавним лепесток в QML, если включена сакура
-            try:
-                root = overlay.rootObject()
-                if root is not None and getattr(w, 'sakura_trail_enabled', False):
-                    if hasattr(root, 'spawnPetal'):
-                        # розовый цвет для лепестков
-                        root.spawnPetal(local.x(), local.y(), float(w.trail_width) * 2.0, '#ffb3b3')
-            except Exception:
-                logger.exception('Failed to spawn petal via QML (local coordinates)')
-        except Exception:
-            try:
-                if overlay is not None:
-                    overlay.push_point(pos.x(), pos.y())
-                    root = overlay.rootObject()
-                    if root is not None and getattr(w, 'sakura_trail_enabled', False):
-                        if hasattr(root, 'spawnPetal'):
-                            root.spawnPetal(pos.x(), pos.y(), float(w.trail_width) * 2.0, '#ffb3b3')
-            except Exception:
-                logger.exception('Failed to push point or spawn petal via QML (global coordinates)')
-
-    timer = QTimer()
-    timer.timeout.connect(update_overlay)
-    timer.start(16)
-
-    # Следим за изменением размера основного окна
-    def on_main_resize(event=None):
-        if overlay is not None:
-            try:
-                overlay.setGeometry(0, 0, w.width(), w.height())
-            except Exception:
-                logger.exception('Failed to resize overlay')
-
-    # Подвешиваем обработчик размера
-    old_resize = w.resizeEvent
-    def new_resize(event):
-        try:
-            old_resize(event)
-        except Exception:
-            pass
-        on_main_resize(event)
-    w.resizeEvent = new_resize
-
     sys.exit(app.exec())
