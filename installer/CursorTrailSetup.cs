@@ -19,185 +19,185 @@ namespace CursorTrailInstaller
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new SetupForm());
+            try
+            {
+                Application.Run(new SetupForm());
+            }
+            catch (Exception ex)
+            {
+                var logPath = Path.Combine(Path.GetTempPath(), "CursorTrailSetup.log");
+                File.WriteAllText(logPath, ex.ToString());
+                MessageBox.Show("Не удалось открыть установщик.\r\n\r\nЛог: " + logPath, "CursorTrail Setup", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
     }
 
-    internal sealed class SetupForm : Form
+    internal sealed class SetupForm : InstallerShellForm
     {
         private const string AppName = "CursorTrail";
         private const string DisplayName = "Cursor Trail";
+        private const string Version = "1.1";
+
         private readonly string defaultInstallDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Programs",
             AppName);
 
         private TextBox pathBox;
-        private ProgressBar progressBar;
+        private ProgressView progressBar;
         private Label statusLabel;
-        private Button installButton;
-        private Button browseButton;
-        private Button cancelButton;
-        private Button launchButton;
+        private AccentButton installButton;
+        private AccentButton browseButton;
+        private AccentButton cancelButton;
+        private AccentButton launchButton;
         private string installedExePath;
 
         public SetupForm()
         {
+            Text = "CursorTrail Setup";
+            ClientSize = new Size(840, 560);
+            BuildChrome("CursorTrail Setup");
             BuildUi();
         }
 
         private void BuildUi()
         {
-            Text = "CursorTrail Setup";
-            Icon = Icon.ExtractAssociatedIcon(Assembly.GetExecutingAssembly().Location);
-            StartPosition = FormStartPosition.CenterScreen;
-            FormBorderStyle = FormBorderStyle.FixedSingle;
-            MaximizeBox = false;
-            MinimizeBox = true;
-            ClientSize = new Size(760, 500);
-            BackColor = Color.FromArgb(248, 250, 252);
-            Font = new Font("Segoe UI", 10F);
-
-            var header = new Panel
+            var header = new HeaderPanel
             {
-                Dock = DockStyle.Top,
-                Height = 128,
-                BackColor = Color.FromArgb(20, 24, 35)
+                Location = new Point(1, 43),
+                Size = new Size(ClientSize.Width - 2, 154),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
             };
             Controls.Add(header);
 
-            var iconBox = new PictureBox
+            var logo = new LogoView
             {
-                Size = new Size(72, 72),
-                Location = new Point(30, 28),
-                SizeMode = PictureBoxSizeMode.StretchImage,
-                Image = Icon.ToBitmap()
+                Image = UiKit.LoadLogoImage(),
+                Location = new Point(40, 28),
+                Size = new Size(96, 96)
             };
-            header.Controls.Add(iconBox);
+            header.Controls.Add(logo);
 
-            var title = new Label
-            {
-                AutoSize = true,
-                Text = "Cursor Trail",
-                ForeColor = Color.White,
-                Font = new Font("Segoe UI Semibold", 24F, FontStyle.Bold),
-                Location = new Point(122, 30)
-            };
-            header.Controls.Add(title);
+            header.Controls.Add(UiKit.MakeLabel("Cursor Trail", 26F, FontStyle.Bold, UiKit.Text, new Point(154, 35), new Size(360, 42)));
+            header.Controls.Add(UiKit.MakeLabel("Красивый след курсора. Быстрая установка для Windows.", 10.5F, FontStyle.Regular, UiKit.MutedText, new Point(158, 82), new Size(460, 24)));
 
-            var subtitle = new Label
+            var versionBadge = new RoundedPanel
             {
-                AutoSize = true,
-                Text = "Установка версии 1.1 для Windows",
-                ForeColor = Color.FromArgb(190, 205, 230),
-                Font = new Font("Segoe UI", 11F),
-                Location = new Point(126, 78)
+                Location = new Point(158, 112),
+                Size = new Size(116, 28),
+                Radius = 14,
+                BackColor = Color.FromArgb(36, 36, 43),
+                BorderColor = Color.FromArgb(65, 65, 76)
             };
-            header.Controls.Add(subtitle);
+            var versionLabel = UiKit.MakeLabel("версия " + Version, 9F, FontStyle.Bold, UiKit.Text, new Point(0, 0), new Size(116, 28));
+            versionLabel.TextAlign = ContentAlignment.MiddleCenter;
+            versionBadge.Controls.Add(versionLabel);
+            header.Controls.Add(versionBadge);
 
-            var bodyTitle = new Label
-            {
-                AutoSize = true,
-                Text = "Настраиваемый след курсора",
-                ForeColor = Color.FromArgb(24, 29, 39),
-                Font = new Font("Segoe UI Semibold", 15F, FontStyle.Bold),
-                Location = new Point(34, 158)
-            };
+            var bodyTitle = UiKit.MakeLabel("Установка приложения", 19F, FontStyle.Bold, UiKit.Text, new Point(44, 222), new Size(420, 34));
             Controls.Add(bodyTitle);
 
-            var bodyText = new Label
-            {
-                Text = "Установщик добавит приложение в профиль пользователя, создаст ярлыки в меню Пуск и на рабочем столе, а также зарегистрирует удаление через настройки Windows.",
-                ForeColor = Color.FromArgb(75, 85, 99),
-                Font = new Font("Segoe UI", 10.5F),
-                Location = new Point(36, 195),
-                Size = new Size(685, 52)
-            };
+            var bodyText = UiKit.MakeLabel(
+                "Выберите папку, а установщик аккуратно распакует файлы, создаст ярлыки и добавит удаление через настройки Windows.",
+                10.2F,
+                FontStyle.Regular,
+                UiKit.MutedText,
+                new Point(46, 260),
+                new Size(700, 44));
             Controls.Add(bodyText);
 
-            var pathLabel = new Label
-            {
-                AutoSize = true,
-                Text = "Папка установки",
-                ForeColor = Color.FromArgb(55, 65, 81),
-                Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold),
-                Location = new Point(36, 265)
-            };
-            Controls.Add(pathLabel);
+            AddFeatureChip("Профили", new Point(46, 308));
+            AddFeatureChip("RGB Trail", new Point(142, 308));
+            AddFeatureChip("Sakura", new Point(248, 308));
+            AddFeatureChip("Pixel", new Point(340, 308));
 
+            Controls.Add(UiKit.MakeLabel("Папка установки", 9.5F, FontStyle.Bold, UiKit.MutedText, new Point(46, 356), new Size(180, 22)));
+
+            var inputPanel = new RoundedPanel
+            {
+                Location = new Point(46, 381),
+                Size = new Size(590, 42),
+                Radius = 12,
+                BackColor = UiKit.Surface2,
+                BorderColor = Color.FromArgb(66, 66, 76)
+            };
             pathBox = new TextBox
             {
-                Location = new Point(39, 292),
-                Size = new Size(560, 30),
+                BorderStyle = BorderStyle.None,
+                BackColor = UiKit.Surface2,
+                ForeColor = UiKit.Text,
+                Font = UiKit.Segoe(10.2F, FontStyle.Regular),
+                Location = new Point(14, 11),
+                Size = new Size(560, 20),
                 Text = defaultInstallDir
             };
-            Controls.Add(pathBox);
+            inputPanel.Controls.Add(pathBox);
+            Controls.Add(inputPanel);
 
-            browseButton = SecondaryButton("Обзор", new Point(613, 290), new Size(108, 34));
+            browseButton = new AccentButton
+            {
+                Text = "Обзор",
+                Location = new Point(654, 381),
+                Size = new Size(130, 42)
+            };
             browseButton.Click += BrowseButton_Click;
             Controls.Add(browseButton);
 
-            progressBar = new ProgressBar
+            progressBar = new ProgressView
             {
-                Location = new Point(39, 355),
-                Size = new Size(682, 18),
-                Style = ProgressBarStyle.Continuous
+                Location = new Point(46, 451),
+                Size = new Size(738, 16)
             };
             Controls.Add(progressBar);
 
-            statusLabel = new Label
-            {
-                Text = "Готов к установке.",
-                ForeColor = Color.FromArgb(75, 85, 99),
-                Location = new Point(36, 383),
-                Size = new Size(685, 28)
-            };
+            statusLabel = UiKit.MakeLabel("Готов к установке.", 9.5F, FontStyle.Regular, UiKit.MutedText, new Point(46, 477), new Size(480, 24));
             Controls.Add(statusLabel);
 
-            installButton = PrimaryButton("Установить", new Point(473, 435), new Size(120, 38));
+            installButton = new AccentButton
+            {
+                Text = "Установить",
+                Primary = true,
+                Location = new Point(516, 504),
+                Size = new Size(130, 40)
+            };
             installButton.Click += InstallButton_Click;
             Controls.Add(installButton);
 
-            launchButton = PrimaryButton("Запустить", new Point(473, 435), new Size(120, 38));
-            launchButton.Visible = false;
+            launchButton = new AccentButton
+            {
+                Text = "Запустить",
+                Primary = true,
+                Location = new Point(516, 504),
+                Size = new Size(130, 40),
+                Visible = false
+            };
             launchButton.Click += LaunchButton_Click;
             Controls.Add(launchButton);
 
-            cancelButton = SecondaryButton("Отмена", new Point(607, 435), new Size(114, 38));
+            cancelButton = new AccentButton
+            {
+                Text = "Отмена",
+                Location = new Point(662, 504),
+                Size = new Size(122, 40)
+            };
             cancelButton.Click += delegate { Close(); };
             Controls.Add(cancelButton);
         }
 
-        private Button PrimaryButton(string text, Point location, Size size)
+        private void AddFeatureChip(string text, Point location)
         {
-            var button = new Button
+            var chip = new RoundedPanel
             {
-                Text = text,
                 Location = location,
-                Size = size,
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Color.FromArgb(36, 99, 235),
-                ForeColor = Color.White,
-                Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold)
+                Size = new Size(Math.Max(78, text.Length * 9 + 28), 30),
+                Radius = 15,
+                BackColor = Color.FromArgb(31, 31, 37),
+                BorderColor = Color.FromArgb(56, 56, 66)
             };
-            button.FlatAppearance.BorderSize = 0;
-            return button;
-        }
-
-        private Button SecondaryButton(string text, Point location, Size size)
-        {
-            var button = new Button
-            {
-                Text = text,
-                Location = location,
-                Size = size,
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Color.White,
-                ForeColor = Color.FromArgb(31, 41, 55),
-                Font = new Font("Segoe UI", 10F)
-            };
-            button.FlatAppearance.BorderColor = Color.FromArgb(209, 213, 219);
-            return button;
+            var label = UiKit.MakeLabel(text, 8.5F, FontStyle.Bold, UiKit.Text, new Point(0, 0), new Size(chip.Width, chip.Height));
+            label.TextAlign = ContentAlignment.MiddleCenter;
+            chip.Controls.Add(label);
+            Controls.Add(chip);
         }
 
         private void BrowseButton_Click(object sender, EventArgs e)
@@ -225,6 +225,11 @@ namespace CursorTrailInstaller
                 Install(installDir);
             }).ContinueWith(task =>
             {
+                if (IsDisposed || !IsHandleCreated)
+                {
+                    return;
+                }
+
                 BeginInvoke(new Action(delegate
                 {
                     if (task.Exception != null)
@@ -261,16 +266,14 @@ namespace CursorTrailInstaller
                 throw new InvalidOperationException("Папка установки не указана.");
             }
 
+            installDir = Path.GetFullPath(installDir);
             installedExePath = Path.Combine(installDir, "Cursor Trail.exe");
+
             Report("Остановка запущенной копии приложения...", 5);
             CloseRunningApplication();
 
             Report("Подготовка папки установки...", 10);
-            if (Directory.Exists(installDir))
-            {
-                Directory.Delete(installDir, true);
-            }
-            Directory.CreateDirectory(installDir);
+            PrepareInstallDirectory(installDir);
 
             Report("Распаковка файлов приложения...", 15);
             ExtractPayload(installDir);
@@ -289,6 +292,59 @@ namespace CursorTrailInstaller
             Report("Готово.", 100);
         }
 
+        private static void PrepareInstallDirectory(string installDir)
+        {
+            if (IsUnsafeInstallPath(installDir))
+            {
+                throw new InvalidOperationException("Выберите отдельную папку для Cursor Trail, а не системную или корневую папку.");
+            }
+
+            if (!Directory.Exists(installDir))
+            {
+                Directory.CreateDirectory(installDir);
+                return;
+            }
+
+            var hasCursorTrailFiles =
+                File.Exists(Path.Combine(installDir, "Cursor Trail.exe")) ||
+                File.Exists(Path.Combine(installDir, "CursorTrailUninstall.exe")) ||
+                Directory.Exists(Path.Combine(installDir, "_internal"));
+            var isEmpty = !Directory.EnumerateFileSystemEntries(installDir).Any();
+
+            if (!hasCursorTrailFiles && !isEmpty)
+            {
+                throw new InvalidOperationException("Выбранная папка не пустая и не похожа на папку Cursor Trail. Выберите отдельную папку установки.");
+            }
+
+            Directory.Delete(installDir, true);
+            Directory.CreateDirectory(installDir);
+        }
+
+        private static bool IsUnsafeInstallPath(string installDir)
+        {
+            var fullPath = Path.GetFullPath(installDir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var root = Path.GetPathRoot(fullPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (string.Equals(fullPath, root, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            var unsafePaths = new[]
+            {
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                Environment.GetFolderPath(Environment.SpecialFolder.Windows)
+            };
+
+            return unsafePaths
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Select(path => Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+                .Any(path => string.Equals(path, fullPath, StringComparison.OrdinalIgnoreCase));
+        }
+
         private void ExtractPayload(string installDir)
         {
             var assembly = Assembly.GetExecutingAssembly();
@@ -302,11 +358,11 @@ namespace CursorTrailInstaller
             using (var archive = new ZipArchive(stream, ZipArchiveMode.Read))
             {
                 var entries = archive.Entries.Where(entry => !string.IsNullOrEmpty(entry.Name)).ToList();
+                var installRoot = Path.GetFullPath(installDir + Path.DirectorySeparatorChar);
                 for (var i = 0; i < entries.Count; i++)
                 {
                     var entry = entries[i];
                     var destinationPath = Path.GetFullPath(Path.Combine(installDir, entry.FullName));
-                    var installRoot = Path.GetFullPath(installDir + Path.DirectorySeparatorChar);
                     if (!destinationPath.StartsWith(installRoot, StringComparison.OrdinalIgnoreCase))
                     {
                         throw new InvalidOperationException("Недопустимый путь внутри payload.");
@@ -326,17 +382,23 @@ namespace CursorTrailInstaller
             var startMenuDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), DisplayName);
             Directory.CreateDirectory(startMenuDir);
 
+            var iconPath = Path.Combine(installDir, "icon.ico");
+            if (!File.Exists(iconPath))
+            {
+                iconPath = exePath;
+            }
+
             CreateShortcut(
                 Path.Combine(startMenuDir, DisplayName + ".lnk"),
                 exePath,
                 installDir,
-                exePath);
+                iconPath);
 
             CreateShortcut(
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), DisplayName + ".lnk"),
                 exePath,
                 installDir,
-                exePath);
+                iconPath);
 
             var uninstallPath = Path.Combine(installDir, "CursorTrailUninstall.exe");
             if (File.Exists(uninstallPath))
@@ -345,13 +407,18 @@ namespace CursorTrailInstaller
                     Path.Combine(startMenuDir, "Удалить " + DisplayName + ".lnk"),
                     uninstallPath,
                     installDir,
-                    uninstallPath);
+                    iconPath);
             }
         }
 
         private static void CreateShortcut(string shortcutPath, string targetPath, string workingDirectory, string iconPath)
         {
             var shellType = Type.GetTypeFromProgID("WScript.Shell");
+            if (shellType == null)
+            {
+                return;
+            }
+
             var shell = Activator.CreateInstance(shellType);
             var shortcut = shellType.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, null, shell, new object[] { shortcutPath });
             var shortcutType = shortcut.GetType();
@@ -366,13 +433,19 @@ namespace CursorTrailInstaller
         private static void RegisterUninstall(string installDir, string exePath)
         {
             var uninstallPath = Path.Combine(installDir, "CursorTrailUninstall.exe");
+            var iconPath = Path.Combine(installDir, "icon.ico");
+            if (!File.Exists(iconPath))
+            {
+                iconPath = exePath;
+            }
+
             using (var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\" + AppName))
             {
                 key.SetValue("DisplayName", DisplayName);
-                key.SetValue("DisplayVersion", "1.1");
+                key.SetValue("DisplayVersion", Version);
                 key.SetValue("Publisher", "zxckurayami");
                 key.SetValue("InstallLocation", installDir);
-                key.SetValue("DisplayIcon", exePath);
+                key.SetValue("DisplayIcon", iconPath);
                 key.SetValue("UninstallString", "\"" + uninstallPath + "\"");
                 key.SetValue("NoModify", 1, RegistryValueKind.DWord);
                 key.SetValue("NoRepair", 1, RegistryValueKind.DWord);
@@ -412,10 +485,15 @@ namespace CursorTrailInstaller
 
         private void Report(string message, int progress)
         {
+            if (IsDisposed || !IsHandleCreated)
+            {
+                return;
+            }
+
             BeginInvoke(new Action(delegate
             {
                 statusLabel.Text = message;
-                progressBar.Value = Math.Max(0, Math.Min(100, progress));
+                progressBar.Value = progress;
             }));
         }
     }

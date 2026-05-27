@@ -16,127 +16,101 @@ namespace CursorTrailInstaller
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new UninstallForm());
+            try
+            {
+                Application.Run(new UninstallForm());
+            }
+            catch (Exception ex)
+            {
+                var logPath = Path.Combine(Path.GetTempPath(), "CursorTrailUninstall.log");
+                File.WriteAllText(logPath, ex.ToString());
+                MessageBox.Show("Не удалось открыть удаление Cursor Trail.\r\n\r\nЛог: " + logPath, "Cursor Trail", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
     }
 
-    internal sealed class UninstallForm : Form
+    internal sealed class UninstallForm : InstallerShellForm
     {
         private const string AppName = "CursorTrail";
         private const string DisplayName = "Cursor Trail";
 
-        private ProgressBar progressBar;
-        private Label statusLabel;
-        private Button removeButton;
-        private Button cancelButton;
         private readonly string installDir;
+        private ProgressView progressBar;
+        private Label statusLabel;
+        private AccentButton removeButton;
+        private AccentButton cancelButton;
 
         public UninstallForm()
         {
             installDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            Text = "Удаление Cursor Trail";
+            ClientSize = new Size(720, 430);
+            BuildChrome("Cursor Trail Uninstall");
             BuildUi();
         }
 
         private void BuildUi()
         {
-            Text = "Удаление Cursor Trail";
-            Icon = Icon.ExtractAssociatedIcon(Assembly.GetExecutingAssembly().Location);
-            StartPosition = FormStartPosition.CenterScreen;
-            FormBorderStyle = FormBorderStyle.FixedSingle;
-            MaximizeBox = false;
-            ClientSize = new Size(620, 350);
-            BackColor = Color.FromArgb(248, 250, 252);
-            Font = new Font("Segoe UI", 10F);
-
-            var header = new Panel
+            var header = new HeaderPanel
             {
-                Dock = DockStyle.Top,
-                Height = 105,
-                BackColor = Color.FromArgb(20, 24, 35)
+                Location = new Point(1, 43),
+                Size = new Size(ClientSize.Width - 2, 132),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
             };
             Controls.Add(header);
 
-            var iconBox = new PictureBox
+            var logo = new LogoView
             {
-                Size = new Size(58, 58),
-                Location = new Point(28, 24),
-                SizeMode = PictureBoxSizeMode.StretchImage,
-                Image = Icon.ToBitmap()
+                Image = UiKit.LoadLogoImage(),
+                Location = new Point(38, 24),
+                Size = new Size(82, 82)
             };
-            header.Controls.Add(iconBox);
+            header.Controls.Add(logo);
 
-            var title = new Label
+            header.Controls.Add(UiKit.MakeLabel("Удаление Cursor Trail", 22F, FontStyle.Bold, UiKit.Text, new Point(138, 34), new Size(430, 34)));
+            header.Controls.Add(UiKit.MakeLabel("Удалим ярлыки, файлы приложения и запись установки Windows.", 10F, FontStyle.Regular, UiKit.MutedText, new Point(141, 76), new Size(500, 24)));
+
+            Controls.Add(UiKit.MakeLabel("Папка приложения", 9.5F, FontStyle.Bold, UiKit.MutedText, new Point(44, 210), new Size(180, 22)));
+
+            var pathPanel = new RoundedPanel
             {
-                AutoSize = true,
-                Text = "Удаление Cursor Trail",
-                ForeColor = Color.White,
-                Font = new Font("Segoe UI Semibold", 19F, FontStyle.Bold),
-                Location = new Point(105, 25)
+                Location = new Point(44, 238),
+                Size = new Size(632, 54),
+                Radius = 12,
+                BackColor = UiKit.Surface2,
+                BorderColor = Color.FromArgb(66, 66, 76)
             };
-            header.Controls.Add(title);
+            pathPanel.Controls.Add(UiKit.MakeLabel(installDir, 9.5F, FontStyle.Regular, UiKit.Text, new Point(14, 17), new Size(604, 22)));
+            Controls.Add(pathPanel);
 
-            var subtitle = new Label
+            progressBar = new ProgressView
             {
-                AutoSize = true,
-                Text = "Приложение, ярлыки и запись установки будут удалены.",
-                ForeColor = Color.FromArgb(190, 205, 230),
-                Font = new Font("Segoe UI", 10.5F),
-                Location = new Point(108, 66)
-            };
-            header.Controls.Add(subtitle);
-
-            var bodyText = new Label
-            {
-                Text = "Cursor Trail установлен в папку:\r\n" + installDir,
-                ForeColor = Color.FromArgb(55, 65, 81),
-                Location = new Point(34, 135),
-                Size = new Size(545, 60)
-            };
-            Controls.Add(bodyText);
-
-            progressBar = new ProgressBar
-            {
-                Location = new Point(37, 218),
-                Size = new Size(540, 18)
+                Location = new Point(44, 322),
+                Size = new Size(632, 16)
             };
             Controls.Add(progressBar);
 
-            statusLabel = new Label
-            {
-                Text = "Готов к удалению.",
-                ForeColor = Color.FromArgb(75, 85, 99),
-                Location = new Point(34, 248),
-                Size = new Size(545, 28)
-            };
+            statusLabel = UiKit.MakeLabel("Готов к удалению.", 9.5F, FontStyle.Regular, UiKit.MutedText, new Point(44, 350), new Size(420, 24));
             Controls.Add(statusLabel);
 
-            removeButton = Button("Удалить", new Point(351, 292), true);
+            removeButton = new AccentButton
+            {
+                Text = "Удалить",
+                Danger = true,
+                Location = new Point(430, 374),
+                Size = new Size(116, 40)
+            };
             removeButton.Click += RemoveButton_Click;
             Controls.Add(removeButton);
 
-            cancelButton = Button("Отмена", new Point(474, 292), false);
+            cancelButton = new AccentButton
+            {
+                Text = "Отмена",
+                Location = new Point(560, 374),
+                Size = new Size(116, 40)
+            };
             cancelButton.Click += delegate { Close(); };
             Controls.Add(cancelButton);
-        }
-
-        private Button Button(string text, Point location, bool primary)
-        {
-            var button = new Button
-            {
-                Text = text,
-                Location = location,
-                Size = new Size(103, 36),
-                FlatStyle = FlatStyle.Flat,
-                BackColor = primary ? Color.FromArgb(220, 38, 38) : Color.White,
-                ForeColor = primary ? Color.White : Color.FromArgb(31, 41, 55),
-                Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold)
-            };
-            button.FlatAppearance.BorderColor = Color.FromArgb(209, 213, 219);
-            if (primary)
-            {
-                button.FlatAppearance.BorderSize = 0;
-            }
-            return button;
         }
 
         private void RemoveButton_Click(object sender, EventArgs e)
@@ -178,7 +152,7 @@ namespace CursorTrailInstaller
         private void Report(string text, int progress)
         {
             statusLabel.Text = text;
-            progressBar.Value = Math.Max(0, Math.Min(100, progress));
+            progressBar.Value = progress;
             Application.DoEvents();
         }
 
