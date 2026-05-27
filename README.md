@@ -1,6 +1,4 @@
-<p align="center">
-  <img width="128" height="128" alt="Cursor Trail" src="icon.ico">
-</p>
+<img width="128" height="128" alt="Cursor Trail" src="icon.ico">
 
 # Cursor Trail
 
