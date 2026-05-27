@@ -35,11 +35,11 @@ Cursor Trail — небольшое Windows-приложение на Python и 
 
 ## Скачать
 
-Готовая Windows-сборка опубликована в GitHub Releases:
+Готовый Windows-установщик опубликован в GitHub Releases:
 
 https://github.com/zxckurayami/CursorTrail/releases
 
-Скачайте архив `CursorTrail-v1.1-windows-x64.zip`, распакуйте его в удобную папку и запустите `Cursor Trail.exe`.
+Скачайте `CursorTrail-Setup-1.1-x64.exe` и запустите его. Установщик сам распакует приложение, добавит ярлыки и запустит Cursor Trail.
 
 ## Технологии
 
@@ -75,9 +75,17 @@ python -m PyInstaller "Cursor Trail.spec"
 dist\Cursor Trail\Cursor Trail.exe
 ```
 
+## Сборка установщика
+
+Установщик собирается из готовой папки `dist\Cursor Trail` через встроенный Windows IExpress и скрипты из `installer`.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File installer\build_installer.ps1
+```
+
 ## Как пользоваться
 
-1. Запустите `Cursor Trail.exe` или `python cursor_trail_qt.py`.
+1. Установите приложение через `CursorTrail-Setup-1.1-x64.exe` или запустите `python cursor_trail_qt.py` из исходников.
 2. Откройте настройки через иконку в системном трее.
 3. Настройте линию, эффекты, тему, язык и профили.
 4. Нажмите `Применить`.
