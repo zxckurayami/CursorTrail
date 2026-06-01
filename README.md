@@ -1,7 +1,8 @@
 <img align="left" width="128" height="128" alt="Cursor Trail" src="assets/cursortrail-logo-modern-256.png">
 
-# Cursor Trail
-
+<br>
+<strong><font size="6">Cursor Trail</font></strong>
+<br><br>
 **Актуальная версия: 1.2**
 
 Cursor Trail — Windows-приложение на Python и PySide6, которое добавляет на рабочий стол красивый настраиваемый след курсора. Можно менять длину и толщину линии, собирать собственный градиент, включать плавное затухание, прозрачность, свечение, обводку, RGB-анимацию, пиксельный режим и эффект сакуры.
