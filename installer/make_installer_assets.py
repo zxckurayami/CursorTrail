@@ -1,6 +1,7 @@
 import struct
 import sys
 import zlib
+import shutil
 
 
 ICON_SIZES = (256, 128, 64, 48, 32, 16)
@@ -153,7 +154,7 @@ def main():
     width, height, pixels = read_source_icon(source_icon)
     square = make_square_canvas(width, height, pixels, 256)
     write_png(logo_png, 256, square)
-    write_ico(setup_icon, square)
+    shutil.copyfile(source_icon, setup_icon)
 
 
 if __name__ == "__main__":
