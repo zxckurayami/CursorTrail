@@ -1,8 +1,5 @@
 <img align="left" width="128" height="128" alt="Cursor Trail" src="assets/cursortrail-logo-modern-256.png">
 
-
-
-
 # Cursor Trail
 
 **Актуальная версия: 1.2**
