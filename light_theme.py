@@ -73,9 +73,9 @@ class LightThemeMixin:
     def apply_menu_style(self, widget):
         widget.setStyleSheet("""
             QWidget {
-                background: #f5f5f5;
+                background: rgba(255, 255, 255, 172);
                 border-radius: 24px;
-                border: 1px solid #e0e0e0;
+                border: 1px solid rgba(31, 35, 40, 28);
             }
         """)
 
@@ -83,11 +83,16 @@ class LightThemeMixin:
         btn.setStyleSheet("""
             QPushButton {
                 background: transparent;
-                color: #232323;
-                font: bold 22pt 'Segoe UI';
+                color: #20242a;
+                font: 16pt 'Segoe UI';
                 border: none;
+                border-radius: 12px;
+                padding: 0px;
             }
-            QPushButton:hover { color: #ff5555; }
+            QPushButton:hover {
+                background: rgba(31, 35, 40, 16);
+                color: #111318;
+            }
         """)
 
     def apply_gear_icon(self, label):
@@ -108,85 +113,89 @@ class LightThemeMixin:
         label.raise_()
 
     def apply_author_label_style(self, label, widget):
-        label.setStyleSheet(f"color: #232323; font: {AUTHOR_FONT_SIZE}pt 'Segoe UI'; background: transparent;")
+        label.setStyleSheet(f"color: rgba(31, 35, 40, 160); font: {AUTHOR_FONT_SIZE}pt 'Segoe UI Variable'; background: transparent;")
         label.adjustSize()
         label.move(12, widget.height() - label.height() - 12)
         label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         label.raise_()
 
     def paintEvent(self, event, widget):
-        # Simple solid / translucent panel painting without blur
         painter = QPainter(widget)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        rect = widget.rect()
+        rect = QRectF(widget.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         path = QPainterPath()
-        radius = 24  # изменённый радиус закругления (в пикселях)
-        path.addRoundedRect(QRectF(rect), radius, radius)
+        radius = 24
+        path.addRoundedRect(rect, radius, radius)
+        bg = QLinearGradient(rect.topLeft(), rect.bottomRight())
+        bg.setColorAt(0.0, QColor(255, 255, 255, 236))
+        bg.setColorAt(0.55, QColor(245, 247, 250, 218))
+        bg.setColorAt(1.0, QColor(232, 236, 242, 210))
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(255, 255, 255, 255))
+        painter.setBrush(bg)
         painter.drawPath(path)
-        pen = QPen(QColor(0, 0, 0, 30), 1)
+        painter.setPen(QPen(QColor(255, 255, 255, 150), 1))
+        painter.drawLine(24, 1, widget.width() - 24, 1)
+        pen = QPen(QColor(20, 24, 32, 32), 1)
         painter.setPen(pen)
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawPath(path)
         painter.end()
 
     def apply_theme(self):
-        # Use transparent background so rounded corners of the painted panel show
         self.setStyleSheet("""
             QDialog {
                 background: transparent;
-                border-radius: 12px;
+                font-family: 'Segoe UI Variable', 'Segoe UI';
             }
             QLabel {
-                color: #232323;
-                font: bold 16pt 'Segoe UI';
+                color: #20242a;
+                font: 600 12pt 'Segoe UI Variable';
             }
             QPushButton {
-                background: #f5f5f5;
-                color: #232323;
-                border: 1px solid #e0e0e0;
-                border-radius: 12px;
-                padding: 10px;
-                font: bold 14pt 'Segoe UI';
+                background: rgba(255, 255, 255, 0.72);
+                color: #20242a;
+                border: 1px solid rgba(31, 35, 40, 0.10);
+                border-radius: 16px;
+                padding: 10px 16px;
+                font: 700 12pt 'Segoe UI Variable';
             }
             QPushButton:hover {
-                background: #e0e0e0;
-                border-color: #bdbdbd;
+                background: rgba(255, 255, 255, 0.94);
+                border-color: rgba(31, 35, 40, 0.16);
             }
             QPushButton:pressed {
-                background: #d6d6d6;
-                border-color: #bdbdbd;
+                background: rgba(232, 235, 240, 0.95);
             }
             QSlider {
                 background: transparent;
                 min-height: 40px;
             }
             QSlider::groove:horizontal {
-                background: #e0e0e0;
-                height: 8px;
-                border-radius: 4px;
+                background: rgba(31, 35, 40, 0.10);
+                height: 6px;
+                border-radius: 3px;
             }
             QSlider::handle:horizontal {
-                background: #232323;
-                width: 20px;
-                height: 20px;
-                margin: -6px 0;
-                border-radius: 10px;
+                background: #ffffff;
+                border: 1px solid rgba(31, 35, 40, 0.16);
+                width: 22px;
+                height: 22px;
+                margin: -8px 0;
+                border-radius: 11px;
             }
             QComboBox {
-                background: #f5f5f5;
-                color: #232323;
-                border: 1px solid #e0e0e0;
-                padding: 8px;
+                background: rgba(255, 255, 255, 0.72);
+                color: #20242a;
+                border: 1px solid rgba(31, 35, 40, 0.10);
+                padding: 10px 14px;
                 min-width: 120px;
-                font: bold 14pt 'Segoe UI';
-                border-radius: 8px;
+                font: 650 12pt 'Segoe UI Variable';
+                border-radius: 14px;
                 outline: none;
             }
             QComboBox:hover {
-                background: #e0e0e0;
-                border-color: #bdbdbd;
+                background: rgba(255, 255, 255, 0.94);
+                border-color: rgba(31, 35, 40, 0.16);
             }
             QComboBox::drop-down {
                 border: none;
@@ -197,12 +206,13 @@ class LightThemeMixin:
                 margin: 0px;
             }
             QComboBox QAbstractItemView {
-                background: #f5f5f5;
-                color: #232323;
-                selection-background-color: #e0e0e0;
-                selection-color: #232323;
-                border-radius: 0px;
-                padding: 4px;
+                background: #ffffff;
+                color: #20242a;
+                selection-background-color: #eef1f5;
+                selection-color: #20242a;
+                border: 1px solid rgba(31, 35, 40, 0.10);
+                border-radius: 12px;
+                padding: 6px;
             }
         """)
 
@@ -210,26 +220,29 @@ class LightThemeMixin:
         if selected:
             return """
                 QPushButton {
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                        stop:0 #fff, stop:0.12 #f5f5f5, stop:1 #e0e0e0);
-                    color: #232323;
-                    border: none;
-                    font: bold 15pt 'Segoe UI';
-                    border-radius: 0px;
+                    background: rgba(255, 255, 255, 0.72);
+                    color: #161a20;
+                    border: 1px solid rgba(31, 35, 40, 0.08);
+                    font: 700 11pt 'Segoe UI Variable';
+                    border-radius: 16px;
+                    text-align: left;
+                    padding-left: 18px;
                 }
             """
         else:
             return """
                 QPushButton {
                     background: transparent;
-                    color: #888;
+                    color: rgba(31, 35, 40, 150);
                     border: none;
-                    font: 15pt 'Segoe UI';
-                    border-radius: 0px;
+                    font: 600 11pt 'Segoe UI Variable';
+                    border-radius: 16px;
+                    text-align: left;
+                    padding-left: 18px;
                 }
                 QPushButton:hover {
-                    background: #e0e0e0;
-                    color: #232323;
+                    background: rgba(255, 255, 255, 0.52);
+                    color: #20242a;
                 }
             """
 

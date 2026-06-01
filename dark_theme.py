@@ -83,9 +83,9 @@ class DarkThemeMixin:
     def apply_menu_style(self, widget):
         widget.setStyleSheet("""
             QWidget {
-                background: #141414;
+                background: rgba(18, 19, 22, 188);
                 border-radius: 24px;
-                border: 1px solid #232323;
+                border: 1px solid rgba(255, 255, 255, 24);
             }
         """)
 
@@ -94,10 +94,15 @@ class DarkThemeMixin:
             QPushButton {
                 background: transparent;
                 color: #fff;
-                font: bold 22pt 'Segoe UI';
+                font: 16pt 'Segoe UI';
                 border: none;
+                border-radius: 12px;
+                padding: 0px;
             }
-            QPushButton:hover { color: #ff5555; }
+            QPushButton:hover {
+                background: rgba(255, 255, 255, 18);
+                color: #fff;
+            }
         """)
 
     def apply_gear_icon(self, label):
@@ -117,7 +122,7 @@ class DarkThemeMixin:
         label.raise_()
 
     def apply_author_label_style(self, label, widget):
-        label.setStyleSheet(f"color: #fff; font: {AUTHOR_FONT_SIZE}pt 'Segoe UI'; background: transparent;")
+        label.setStyleSheet(f"color: rgba(255, 255, 255, 150); font: {AUTHOR_FONT_SIZE}pt 'Segoe UI Variable'; background: transparent;")
         label.adjustSize()
         label.move(12, widget.height() - label.height() - 12)
         label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
@@ -148,17 +153,22 @@ class DarkThemeMixin:
         ctypes.windll.user32.SetWindowCompositionAttribute(hwnd, ctypes.byref(data))
 
     def paintEvent(self, event, widget):
-        """Draw dark translucent background with optional blur."""
         painter = QPainter(widget)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        rect = widget.rect()
-        radius = 24  # увеличенный радиус скругления
+        rect = QRectF(widget.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        radius = 24
         path = QPainterPath()
-        path.addRoundedRect(QRectF(rect), radius, radius)
+        path.addRoundedRect(rect, radius, radius)
+        bg = QLinearGradient(rect.topLeft(), rect.bottomRight())
+        bg.setColorAt(0.0, QColor(28, 29, 33, 236))
+        bg.setColorAt(0.45, QColor(14, 15, 18, 226))
+        bg.setColorAt(1.0, QColor(8, 9, 11, 220))
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(16, 16, 16, 255))
+        painter.setBrush(bg)
         painter.drawPath(path)
-        pen = QPen(QColor(0, 0, 0, 120), 1)
+        painter.setPen(QPen(QColor(255, 255, 255, 28), 1))
+        painter.drawLine(24, 1, widget.width() - 24, 1)
+        pen = QPen(QColor(255, 255, 255, 22), 1)
         pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
         painter.setPen(pen)
         painter.setBrush(Qt.BrushStyle.NoBrush)
@@ -169,57 +179,57 @@ class DarkThemeMixin:
         self.setStyleSheet("""
             QDialog {
                 background: transparent;
-                border-radius: 12px;
+                font-family: 'Segoe UI Variable', 'Segoe UI';
             }
             QLabel {
-                color: #fff;
-                font: bold 16pt 'Segoe UI';
+                color: #f6f7f9;
+                font: 600 12pt 'Segoe UI Variable';
             }
             QPushButton {
-                background: #232323;
-                color: #fff;
-                border: 1px solid #2a2a2a;
-                border-radius: 12px;
-                padding: 10px;
-                font: bold 14pt 'Segoe UI';
+                background: rgba(255, 255, 255, 0.08);
+                color: #f6f7f9;
+                border: 1px solid rgba(255, 255, 255, 0.10);
+                border-radius: 16px;
+                padding: 10px 16px;
+                font: 700 12pt 'Segoe UI Variable';
             }
             QPushButton:hover {
-                background: #2a2a2a;
-                border-color: #333;
+                background: rgba(255, 255, 255, 0.13);
+                border-color: rgba(255, 255, 255, 0.18);
             }
             QPushButton:pressed {
-                background: #1e1e1e;
-                border-color: #333;
+                background: rgba(255, 255, 255, 0.07);
             }
             QSlider {
                 background: transparent;
                 min-height: 40px;
             }
             QSlider::groove:horizontal {
-                background: #232323;
-                height: 8px;
-                border-radius: 4px;
+                background: rgba(255, 255, 255, 0.10);
+                height: 6px;
+                border-radius: 3px;
             }
             QSlider::handle:horizontal {
-                background: #fff;
-                width: 20px;
-                height: 20px;
-                margin: -6px 0;
-                border-radius: 10px;
+                background: #f6f7f9;
+                border: 1px solid rgba(255, 255, 255, 0.25);
+                width: 22px;
+                height: 22px;
+                margin: -8px 0;
+                border-radius: 11px;
             }
             QComboBox {
-                background: #232323;
-                color: #fff;
-                border: 1px solid #2a2a2a;
-                padding: 8px;
+                background: rgba(255, 255, 255, 0.08);
+                color: #f6f7f9;
+                border: 1px solid rgba(255, 255, 255, 0.10);
+                padding: 10px 14px;
                 min-width: 120px;
-                font: bold 14pt 'Segoe UI';
-                border-radius: 8px;
+                font: 650 12pt 'Segoe UI Variable';
+                border-radius: 14px;
                 outline: none;
             }
             QComboBox:hover {
-                background: #2a2a2a;
-                border-color: #333;
+                background: rgba(255, 255, 255, 0.13);
+                border-color: rgba(255, 255, 255, 0.18);
             }
             QComboBox::drop-down {
                 border: none;
@@ -230,12 +240,13 @@ class DarkThemeMixin:
                 margin: 0px;
             }
             QComboBox QAbstractItemView {
-                background: #232323;
-                color: #fff;
-                selection-background-color: #444;
-                selection-color: #fff;
-                border-radius: 0px;
-                padding: 4px;
+                background: #18191d;
+                color: #f6f7f9;
+                selection-background-color: rgba(255, 255, 255, 0.10);
+                selection-color: #ffffff;
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                border-radius: 12px;
+                padding: 6px;
             }
         """)
 
@@ -243,25 +254,28 @@ class DarkThemeMixin:
         if selected:
             return """
                 QPushButton {
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                        stop:0 #232323, stop:0.12 #232323, stop:1 #181818);
+                    background: rgba(255, 255, 255, 0.10);
                     color: #fff;
-                    border: none;
-                    font: bold 15pt 'Segoe UI';
-                    border-radius: 0px;
+                    border: 1px solid rgba(255, 255, 255, 0.12);
+                    font: 700 11pt 'Segoe UI Variable';
+                    border-radius: 16px;
+                    text-align: left;
+                    padding-left: 18px;
                 }
             """
         else:
             return """
                 QPushButton {
                     background: transparent;
-                    color: #bbb;
+                    color: rgba(255, 255, 255, 165);
                     border: none;
-                    font: 15pt 'Segoe UI';
-                    border-radius: 0px;
+                    font: 600 11pt 'Segoe UI Variable';
+                    border-radius: 16px;
+                    text-align: left;
+                    padding-left: 18px;
                 }
                 QPushButton:hover {
-                    background: #232323;
+                    background: rgba(255, 255, 255, 0.08);
                     color: #fff;
                 }
             """

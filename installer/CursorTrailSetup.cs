@@ -36,7 +36,7 @@ namespace CursorTrailInstaller
     {
         private const string AppName = "CursorTrail";
         private const string DisplayName = "Cursor Trail";
-        private const string Version = "1.1";
+        private const string Version = "1.2";
 
         private readonly string defaultInstallDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
